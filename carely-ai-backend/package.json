@@ -1,0 +1,41 @@
+{
+  "name": "carely-ai-backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node start.js",
+    "start:server": "node server.js",
+    "start:agent": "node agent.js dev",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "type": "module",
+  "dependencies": {
+    "@livekit/agents": "^1.2.8",
+    "@livekit/agents-plugin-bey": "^1.0.10",
+    "@livekit/agents-plugin-openai": "^1.2.8",
+    "@livekit/agents-plugin-silero": "^1.2.8",
+    "@livekit/rtc-node": "^0.13.11",
+    "cors": "^2.8.6",
+    "docxtemplater": "^3.68.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "ffmpeg-static": "^5.2.0",
+    "livekit-server-sdk": "^2.15.1",
+    "mongoose": "^9.2.1",
+    "multer": "^2.0.2",
+    "node-fetch": "^3.3.2",
+    "openai": "^6.17.0",
+    "pizzip": "^3.2.0",
+    "qrcode": "^1.5.4",
+    "uuid": "^13.0.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}
