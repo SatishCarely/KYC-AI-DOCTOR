@@ -5940,9 +5940,9 @@ Respond ONLY with valid JSON in this exact format:
       .map((msg) => {
         const role =
           msg.role === "user"
-            ? "Patient"
+            ? "client"
             : msg.role === "assistant"
-              ? "Dr. Christiana"
+              ? "Agent"
               : "System";
         return `${role}: ${String(msg.content || "").trim()}`;
       })
@@ -6176,7 +6176,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanText).slice
         } else {
           kycCompleteRef.current = true;
           setKycComplete(true);
-          const completionEnglish = `All ${kycFields.length} fields have been completed.\n\nPlease review your responses in the summary panel on the left, then click "Download Filled PDF" to generate your document.`;
+          const completionEnglish = `All ${kycFields.length} fields have been completed.\n\nPlease click "Download Filled PDF" in the top right to generate your document.`;
           try {
             const completionText = await localizeKycText(
               completionEnglish,
@@ -6312,7 +6312,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanText).slice
       } else {
         kycCompleteRef.current = true;
         setKycComplete(true);
-        const completionEnglish = `All ${kycFields.length} fields have been completed.\n\nPlease review your responses in the summary panel on the left, then click "Download Filled PDF" to generate your document.`;
+        const completionEnglish = `All ${kycFields.length} fields have been completed.\n\nPlease click "Download Filled PDF" in the top right to generate your document.`;
         try {
           const completionText = await localizeKycText(
             completionEnglish,
@@ -7472,6 +7472,34 @@ const activeResponses = Object.keys(kycResponsesRef.current).length ? kycRespons
                     <span style={ft.docSub}>Carely Health</span>
                   </div>
                   <div style={ft.topR}>
+                    {getCompletedKycFieldCount(kycFields, kycResponses) >=
+                      kycFields.length && (
+                      <>
+                        <button style={ft.actionBtn} onClick={downloadCompletedKyc}>
+                          Download Filled PDF
+                        </button>
+                        {kycChatMessages.length > 0 && (
+                          <button
+                            style={{
+                              ...ft.actionBtn,
+                              background: "linear-gradient(135deg,#0ea5e9,#0284c7)",
+                            }}
+                            onClick={downloadKycTranscript}
+                          >
+                            Download Transcript
+                          </button>
+                        )}
+                        <button
+                          style={{
+                            ...ft.actionBtn,
+                            background: "rgba(255,255,255,0.08)",
+                          }}
+                          onClick={restartPresetKycDocument}
+                        >
+                          New Session
+                        </button>
+                      </>
+                    )}
                     {!isManagedIframeMode && isRecordingCall && (
                       <span
                         style={{
@@ -7638,7 +7666,7 @@ const activeResponses = Object.keys(kycResponsesRef.current).length ? kycRespons
                         Verification Complete
                       </p>
                       <p style={{ color: "#64748b", fontSize: 14 }}>
-                        Download your filled FMR from the left panel
+                        Download your filled FMR from the top right
                       </p>
                     </div>
                   ) : isManagedIframeMode ? (
@@ -7760,6 +7788,47 @@ const activeResponses = Object.keys(kycResponsesRef.current).length ? kycRespons
                   )}
                 </div>
 
+                <div style={ft.liveTranscript}>
+                  <div style={ft.transcriptHead}>
+                    <span>Live Transcript</span>
+                    {kycTranscriptPreview && (
+                      <span style={ft.transcriptListening}>
+                        client: {kycTranscriptPreview.replace(/^"|"$/g, "")}
+                      </span>
+                    )}
+                  </div>
+                  <div style={ft.transcriptBody}>
+                    {kycChatMessages.filter((msg) => !msg?.isHidden && !msg?.isSystem).length ? (
+                      kycChatMessages
+                        .filter((msg) => !msg?.isHidden && !msg?.isSystem)
+                        .map((msg, index) => (
+                          <div
+                            key={`${msg.role}-${index}-${String(msg.content || "").slice(0, 24)}`}
+                            style={ft.transcriptLine}
+                          >
+                            <span
+                              style={{
+                                ...ft.transcriptRole,
+                                color:
+                                  msg.role === "user" ? "#38bdf8" : "#34d399",
+                              }}
+                            >
+                              {msg.role === "user" ? "client:" : "Agent:"}
+                            </span>
+                            <span style={ft.transcriptText}>
+                              {String(msg.content || "").trim()}
+                            </span>
+                          </div>
+                        ))
+                    ) : (
+                      <div style={ft.transcriptEmpty}>
+                        The live conversation will appear here.
+                      </div>
+                    )}
+                    <div ref={kycChatEndRef} />
+                  </div>
+                </div>
+
                 {isAvatarConnected && !isManagedIframeMode && (
                   <div
                     style={{ ...ft.pip, ...(!cameraEnabled ? ft.pipOff : {}) }}
@@ -7801,7 +7870,8 @@ const activeResponses = Object.keys(kycResponsesRef.current).length ? kycRespons
                   </div>
                 )}
 
-                {kycFields.length > 0 &&
+                {false &&
+                  kycFields.length > 0 &&
                   getCompletedKycFieldCount(kycFields, kycResponses) <
                     kycFields.length &&
                   isAvatarConnected && (
@@ -8394,7 +8464,7 @@ const activeResponses = Object.keys(kycResponsesRef.current).length ? kycRespons
 const ft = {
   layout: {
     display: "grid",
-    gridTemplateColumns: "260px 1fr",
+    gridTemplateColumns: "1fr",
     gap: 0,
     height: "calc(100vh - 100px)",
     borderRadius: "18px",
@@ -8405,7 +8475,7 @@ const ft = {
   side: {
     background: "#0d0d14",
     borderRight: "1px solid rgba(255,255,255,0.05)",
-    display: "flex",
+    display: "none",
     flexDirection: "column",
     overflow: "hidden",
   },
@@ -8563,7 +8633,26 @@ const ft = {
     letterSpacing: "-0.3px",
   },
   docSub: { fontSize: 11, color: "rgba(255,255,255,0.4)", marginLeft: 4 },
-  topR: { display: "flex", alignItems: "center", gap: 10 },
+  topR: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  actionBtn: {
+    padding: "8px 12px",
+    background: "linear-gradient(135deg,#34d399,#059669)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: 10,
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: "pointer",
+    lineHeight: 1,
+    whiteSpace: "nowrap",
+    backdropFilter: "blur(8px)",
+  },
   badge: {
     fontSize: 12,
     color: "rgba(255,255,255,0.75)",
@@ -8598,6 +8687,7 @@ const ft = {
   },
   vidArea: {
     flex: 1,
+    minHeight: 0,
     display: "flex",
     alignItems: "stretch",
     justifyContent: "stretch",
@@ -8657,7 +8747,7 @@ const ft = {
   },
   pip: {
     position: "absolute",
-    bottom: 90,
+    bottom: 270,
     right: 20,
     width: 130,
     height: 175,
@@ -8739,9 +8829,68 @@ const ft = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   },
+  liveTranscript: {
+    height: 180,
+    flexShrink: 0,
+    borderTop: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(3,7,18,0.96)",
+    padding: "12px 18px 14px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  transcriptHead: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    color: "#e2e8f0",
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: "0.2px",
+  },
+  transcriptListening: {
+    color: "#c4b5fd",
+    fontSize: 11,
+    fontWeight: 600,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    maxWidth: "50%",
+  },
+  transcriptBody: {
+    flex: 1,
+    overflow: "auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    paddingRight: 6,
+  },
+  transcriptLine: {
+    display: "grid",
+    gridTemplateColumns: "64px 1fr",
+    gap: 10,
+    alignItems: "start",
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 1.45,
+  },
+  transcriptRole: {
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+  },
+  transcriptText: {
+    minWidth: 0,
+    overflowWrap: "anywhere",
+  },
+  transcriptEmpty: {
+    color: "#64748b",
+    fontSize: 13,
+    fontStyle: "italic",
+  },
   ctrls: {
     position: "absolute",
-    bottom: 0,
+    bottom: 180,
     left: 0,
     right: 0,
     zIndex: 20,
