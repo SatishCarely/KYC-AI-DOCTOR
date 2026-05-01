@@ -49,6 +49,8 @@ let openaiCallCount = 0;
 const KYC_LANGUAGE_NAMES = {
   en: 'English',
   hi: 'Hindi',
+  es: 'Spanish',
+  fr: 'French',
   bn: 'Bengali',
   te: 'Telugu',
   ta: 'Tamil',
@@ -72,6 +74,24 @@ const DOCTOR_TTS_INSTRUCTIONS = [
 const DOCTOR_TTS_SPEED = 0.94;
 const OPENAI_CHAT_MODEL = process.env.OPENAI_CHAT_MODEL || 'gpt-5.1-chat-latest';
 const OPENAI_TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
+
+function withSupportedTemperature(model, temperature) {
+  const normalizedModel = String(model || '').trim().toLowerCase();
+  if (!normalizedModel || typeof temperature !== 'number') return {};
+  if (normalizedModel.startsWith('gpt-5')) {
+    return { temperature: 1 };
+  }
+  return { temperature };
+}
+
+function withSupportedMaxTokens(model, tokenLimit) {
+  const normalizedModel = String(model || '').trim().toLowerCase();
+  if (!normalizedModel || typeof tokenLimit !== 'number') return {};
+  if (normalizedModel.startsWith('gpt-5')) {
+    return { max_completion_tokens: tokenLimit };
+  }
+  return { max_tokens: tokenLimit };
+}
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_KYC_PDF_PATH = path.resolve(__dirname, '../kyc-templates/default-kyc.pdf');
@@ -110,6 +130,32 @@ let autoAgentProcess = null;
 
 function getKycLanguageName(code) {
   return KYC_LANGUAGE_NAMES[code] || 'English';
+}
+
+function isHindiHinglishLanguage(code) {
+  const normalized = String(code || '').trim().toLowerCase();
+  return normalized === 'hi' || normalized === 'hi-in' || normalized === 'hinglish';
+}
+
+function getKycSpeechStyleInstruction(code) {
+  if (isHindiHinglishLanguage(code)) {
+    return [
+      'Speak in natural Hindi and write Hindi text in Devanagari script.',
+      'Use simple everyday Hindi, not Sanskritized words.',
+      'Use common Indian wording like "BP", "sugar", "thyroid", "cholesterol", "surgery", "medicine", "yes", and "no".',
+      'Do not add "अगर हाँ", "agar haan", "if yes", or detail instructions to the main yes/no question.',
+      'Example style: "क्या आपको diabetes, thyroid या sugar की problem है?"',
+    ].join(' ');
+  }
+
+  return `Speak only in ${getKycLanguageName(code)} for all patient-facing responses.`;
+}
+
+function getSarvamLanguageCode(code) {
+  const normalized = String(code || '').trim().toLowerCase();
+  if (normalized === 'hi' || normalized === 'hi-in' || normalized === 'hinglish') return 'hi-IN';
+  if (normalized === 'en' || normalized === 'en-in') return 'en-IN';
+  return normalized.includes('-') ? normalized : `${normalized || 'hi'}-IN`;
 }
 
 function getBeyondPresenceLanguageCode(code) {
@@ -256,9 +302,112 @@ function extractJsonObject(text) {
   }
 }
 
+function decodeEscapedUnicodeText(value) {
+  return String(value || '').replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
+    String.fromCharCode(parseInt(hex, 16))
+  );
+}
+
+const WINDOWS_1252_MOJIBAKE_BYTES = {
+  0x20ac: 0x80,
+  0x201a: 0x82,
+  0x0192: 0x83,
+  0x201e: 0x84,
+  0x2026: 0x85,
+  0x2020: 0x86,
+  0x2021: 0x87,
+  0x02c6: 0x88,
+  0x2030: 0x89,
+  0x0160: 0x8a,
+  0x2039: 0x8b,
+  0x0152: 0x8c,
+  0x017d: 0x8e,
+  0x2018: 0x91,
+  0x2019: 0x92,
+  0x201c: 0x93,
+  0x201d: 0x94,
+  0x2022: 0x95,
+  0x2013: 0x96,
+  0x2014: 0x97,
+  0x02dc: 0x98,
+  0x2122: 0x99,
+  0x0161: 0x9a,
+  0x203a: 0x9b,
+  0x0153: 0x9c,
+  0x017e: 0x9e,
+  0x0178: 0x9f,
+};
+
+function getMojibakeByte(char) {
+  const code = char.charCodeAt(0);
+  if (code <= 255) return code;
+  return WINDOWS_1252_MOJIBAKE_BYTES[code] ?? null;
+}
+
+function hasMojibakeMarker(value) {
+  return /[ÃÂâà]/.test(String(value || ''));
+}
+
+function repairMojibakeSegment(value) {
+  const raw = String(value || '');
+  if (!hasMojibakeMarker(raw)) return raw;
+  const bytes = [...raw].map(getMojibakeByte);
+  if (bytes.some((byte) => byte == null)) return raw;
+
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bytes));
+  } catch {
+    return raw;
+  }
+}
+
+function repairMojibakeText(value) {
+  const raw = String(value || '');
+  if (!hasMojibakeMarker(raw)) return raw;
+
+  const fullyRepaired = repairMojibakeSegment(raw);
+  if (fullyRepaired !== raw) return fullyRepaired;
+
+  return raw.replace(/[\u00A0-\u00FF\u20AC-\u2122]{2,}/g, (segment) =>
+    repairMojibakeSegment(segment)
+  );
+}
+
+function normalizeTranscriptEncoding(value) {
+  return repairMojibakeText(decodeEscapedUnicodeText(value))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripInlineYesDetailInstruction(text) {
+  return String(text || '')
+    .replace(/\s*(?:please\s+)?(?:answer\s+)?yes\s+or\s+no\.?\s*/gi, ' ')
+    .replace(/\s*if\s+yes[, ]+[^.?!]*(?:[.?!]|$)/gi, ' ')
+    .replace(/\s*agar\s+h(?:aa|a)n[, ]+[^.?!]*(?:[.?!]|$)/gi, ' ')
+    .replace(/\s*agar\s+yes[, ]+[^.?!]*(?:[.?!]|$)/gi, ' ')
+    .replace(/\s*(?:yes|no)\s+(?:boliye|bataiye|bataye)\.?\s*/gi, ' ')
+    .replace(/\s*(?:अगर|यदि)\s+(?:हाँ|हां|हा)[, ]*[^।.?!]*(?:[।.?!]|$)/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function parseCanonicalYesNo(text) {
-  const normalized = String(text || '').trim().toLowerCase();
+  const normalized = normalizeTranscriptEncoding(text)
+    .toLowerCase()
+    .replace(/[,\s।.!?;:]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!normalized) return null;
+
+  if (['haan ji', 'ha ji', 'हां', 'हाँ', 'हा', 'हो', 'si', 'sí', 'oui'].includes(normalized)) return 'Yes';
+  if (['नहीं', 'नही', 'नाही', 'non'].includes(normalized)) return 'No';
+
+  const indicNormalized = normalizeIndicSpeechText(normalized)
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (['yes', 'haan ji', 'ha ji', 'haan', 'ha', 'han', 'ho'].includes(indicNormalized)) return 'Yes';
+  if (['no', 'nahi', 'naahi'].includes(indicNormalized)) return 'No';
 
   const yesValues = new Set(['yes', 'y', 'yeah', 'yep', 'true', 'haan', 'ha', 'han', 'ho', 'hoy', 'hoi', 'हाँ', 'हां', 'हो', 'होय']);
   const noValues = new Set(['no', 'n', 'nope', 'nah', 'false', 'nahi', 'naahi', 'नहीं', 'नही', 'नाही']);
@@ -271,6 +420,32 @@ function parseCanonicalYesNo(text) {
 function normalizeIndicSpeechText(value) {
   return String(value || '')
     .toLowerCase()
+    .replace(/\u0939\u093e\u0902|\u0939\u093e\u0901|\u0939\u093e|\u0939\u094b/gi, ' yes ')
+    .replace(/\u0928\u0939\u0940\u0902|\u0928\u0939\u0940|\u0928\u093e\u0939\u0940/gi, ' no ')
+    .replace(/\u091c\u0928\u0935\u0930\u0940/gi, ' january ')
+    .replace(/\u092b\u0930\u0935\u0930\u0940/gi, ' february ')
+    .replace(/\u092e\u093e\u0930\u094d\u091a/gi, ' march ')
+    .replace(/\u0905\u092a\u094d\u0930\u0948\u0932/gi, ' april ')
+    .replace(/\u092e\u0908/gi, ' may ')
+    .replace(/\u091c\u0942\u0928/gi, ' june ')
+    .replace(/\u091c\u0941\u0932\u093e\u0908/gi, ' july ')
+    .replace(/\u0905\u0917\u0938\u094d\u0924/gi, ' august ')
+    .replace(/\u0938\u093f\u0924\u0902\u092c\u0930|\u0938\u093f\u0924\u092e\u094d\u092c\u0930/gi, ' september ')
+    .replace(/\u0905\u0915\u094d\u091f\u0942\u092c\u0930|\u0911\u0915\u094d\u091f\u094b\u092c\u0930/gi, ' october ')
+    .replace(/\u0928\u0935\u0902\u092c\u0930/gi, ' november ')
+    .replace(/\u0926\u093f\u0938\u0902\u092c\u0930/gi, ' december ')
+    .replace(/\u0936\u0942\u0928\u094d\u092f|\u0938\u0941\u0928\u094d\u092f/gi, ' zero ')
+    .replace(/\u090f\u0915/gi, ' one ')
+    .replace(/\u0926\u094b\u0928|\u0926\u094b/gi, ' two ')
+    .replace(/\u0924\u0940\u0928/gi, ' three ')
+    .replace(/\u091a\u093e\u0930/gi, ' four ')
+    .replace(/\u092a\u093e\u0902\u091a|\u092a\u093e\u091a/gi, ' five ')
+    .replace(/\u0938\u0939\u093e|\u091b\u0939/gi, ' six ')
+    .replace(/\u0938\u093e\u0924/gi, ' seven ')
+    .replace(/\u0906\u0920/gi, ' eight ')
+    .replace(/\u0928\u094c|\u0928\u0909/gi, ' nine ')
+    .replace(/\u0926\u0938|\u0926\u0939\u093e/gi, ' ten ')
+    .replace(/\u0939\u091c\u093c\u093e\u0930|\u0939\u091c\u093e\u0930/gi, ' thousand ')
     .replace(/ऑक्टोबर|अक्टूबर|ऑक्टूबर/gi, ' october ')
     .replace(/सप्टेंबर|सितंबर|सितम्बर/gi, ' september ')
     .replace(/नवंबर|नोव्हेंबर/gi, ' november ')
@@ -471,20 +646,31 @@ function parseSpokenNumberTokens(tokens) {
   return used ? total + current : null;
 }
 
-async function localizeKycText(text, languageCode) {
-  const trimmed = String(text || '').trim();
+async function localizeKycText(text, languageCode, options = {}) {
+  const trimmed = normalizeTranscriptEncoding(text);
   if (!trimmed) return '';
   if (!languageCode || languageCode === 'en') return trimmed;
 
   const languageName = getKycLanguageName(languageCode);
+  const hinglishMode = isHindiHinglishLanguage(languageCode);
+  const transcriptScriptMode = Boolean(options.transcriptScript);
   const completion = await trackOpenAICall(`KYC localize ${languageCode}`, () =>
     openai.chat.completions.create({
       model: OPENAI_CHAT_MODEL,
-      temperature: 0.1,
+      ...withSupportedTemperature(OPENAI_CHAT_MODEL, 1),
       messages: [
         {
           role: 'system',
-          content: `You translate Carely KYC assistant text into ${languageName}.
+          content: hinglishMode
+            ? `Convert Carely KYC text into natural Hindi written in Devanagari script.
+
+Rules:
+- Return only patient-facing Hindi text in Devanagari.
+- Preserve names, numbers, dates, acronyms, and form labels accurately.
+- Keep common medical terms readable: BP, sugar, diabetes, thyroid, cholesterol, surgery, medicine, hospital, ECG, MRI, CT, HIV, AIDS.
+- Do not add "agar haan", "if yes", or extra detail instructions unless they are present in the source text.
+- Do not add explanations or notes.`
+            : `You translate Carely KYC assistant text into ${languageName}.
 
 Rules:
 - Return only the translated patient-facing text.
@@ -511,7 +697,7 @@ async function normalizeKycAnswer({
   const fieldLabel = String(currentFieldLabel || '').trim();
   const fieldType = String(currentFieldType || '').trim() || 'text';
   const normalizedLabel = fieldLabel.toLowerCase(); 
-  const trimmed = String(text || '').trim();
+  const trimmed = normalizeTranscriptEncoding(text);
   if (!trimmed) {
     return { englishText: '', canonicalYesNo: null };
   }
@@ -525,9 +711,12 @@ async function normalizeKycAnswer({
   const normalizeFieldAwareValue = (value) => {
     const raw = String(value || '').trim();
     if (!raw) return raw;
+    const medicalFixedRaw = raw
+      .replace(/\bi\s*b\s*b\b/gi, 'High BP')
+      .replace(/\bb\s*p\b/gi, 'BP');
 
     // const normalizedLabel = fieldLabel.toLowerCase();
-    const normalizedRaw = raw.toLowerCase();
+    const normalizedRaw = medicalFixedRaw.toLowerCase();
 
     const titleCase = (input) =>
       String(input || '')
@@ -618,11 +807,28 @@ async function normalizeKycAnswer({
         .toLowerCase()
         .replace(/[^a-z]/g, '');
 
-      if (['male', 'm', 'man', 'boy', 'mail', 'meal', 'mela', 'mael', 'deal', 'deel', 'dill', 'dale'].includes(compact)) return 'Male';
+      if (['male', 'm', 'man', 'boy', 'mail', 'email', 'meal', 'mela', 'mael', 'deal', 'deel', 'dill', 'dale'].includes(compact)) return 'Male';
       if (['female', 'f', 'woman', 'girl', 'lady', 'femail', 'femal', 'feemail'].includes(compact)) return 'Female';
       if (['other', 'nonbinary', 'nonbinaryperson', 'nonbinarygender'].includes(compact)) return 'Other';
 
       return titleCase(input);
+    };
+
+    const normalizeEducation = (input) => {
+      const normalized = String(input || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const fixes = new Map([
+        ['tenth sale', 'Tenth fail'],
+        ['10th sale', '10th fail'],
+        ['ten sale', 'Tenth fail'],
+        ['tenth fail', 'Tenth fail'],
+        ['10th fail', '10th fail'],
+        ['failed 10th grade', 'Failed 10th grade'],
+      ]);
+      return fixes.get(normalized) || input.trim();
     };
 
     const monthMap = {
@@ -927,6 +1133,54 @@ async function normalizeKycAnswer({
       return parsed != null ? String(parsed) : rawInput;
     };
 
+    const normalizeHeightCm = (input) => {
+      const rawInput = String(input || '').trim();
+      if (!rawInput) return '';
+
+      const normalized = normalizeIndicSpeechText(rawInput)
+        .replace(/,/g, ' ')
+        .replace(/\b(centimeters?|centimetres?|cms?|cm|height|is|i am|i'm)\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const directNumeric = normalized.replace(/\s+/g, '');
+      if (/^\d+(\.\d+)?$/.test(directNumeric)) {
+        const numeric = Number(directNumeric);
+        if (numeric >= 70 && numeric < 100) return String(numeric + 100);
+        return directNumeric;
+      }
+
+      const tokens = normalized
+        .split(/\s+/)
+        .map((token) => token.replace(/[^a-z0-9]/g, ''))
+        .filter(Boolean);
+      const singleDigitTokens = new Set([
+        'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+      ]);
+      if (
+        (tokens[0] === 'one' || tokens[0] === '1') &&
+        tokens.slice(1).length >= 2 &&
+        tokens.slice(1).every((token) => singleDigitTokens.has(token) || /^\d$/.test(token))
+      ) {
+        return tokens
+          .map((token) => (SPOKEN_NUMBER_WORDS[token] != null ? SPOKEN_NUMBER_WORDS[token] : token))
+          .join('');
+      }
+
+      const tailParsed =
+        (tokens[0] === 'one' || tokens[0] === '1') && tokens.length > 1
+          ? parseSpokenNumberTokens(tokens.slice(1))
+          : null;
+      if (tailParsed != null && tailParsed >= 20 && tailParsed < 100) {
+        return String(100 + tailParsed);
+      }
+
+      const parsed = parseSpokenNumberTokens(tokens);
+      if (parsed != null) {
+        return parsed >= 70 && parsed < 100 ? String(parsed + 100) : String(parsed);
+      }
+      return rawInput;
+    };
+
     if (
       fieldLabel.toLowerCase().includes("application") ||
       String(currentFieldLabel || "").toLowerCase().includes("application")
@@ -958,19 +1212,27 @@ async function normalizeKycAnswer({
     }
 
     if (fieldType === 'date' || normalizedLabel.includes('date of birth')) {
-      return normalizeDate(raw);
+      return normalizeDate(medicalFixedRaw);
     }
 
     if (normalizedLabel.includes('gender')) {
-      return normalizeGender(raw);
+      return normalizeGender(medicalFixedRaw);
+    }
+
+    if (normalizedLabel.includes('education') || normalizedLabel.includes('qualification')) {
+      return normalizeEducation(medicalFixedRaw);
     }
 
     if (normalizedLabel.includes('contact')) {
-      return normalizePhone(raw);
+      return normalizePhone(medicalFixedRaw);
+    }
+
+    if (normalizedLabel.includes('height')) {
+      return normalizeHeightCm(medicalFixedRaw);
     }
 
     if (fieldType === 'number') {
-      return normalizeNumber(raw);
+      return normalizeNumber(medicalFixedRaw);
     }
 
     if (
@@ -979,10 +1241,10 @@ async function normalizeKycAnswer({
       normalizedLabel === 'name' ||
       normalizedLabel.endsWith(' name')
     ) {
-      return normalizeName(raw);
+      return normalizeName(medicalFixedRaw);
     }
 
-    return raw;
+    return medicalFixedRaw;
   };
 
   const structuredEnglishText = normalizeFieldAwareValue(trimmed);
@@ -994,7 +1256,16 @@ async function normalizeKycAnswer({
     normalizedLabel.includes('contact') ||
     normalizedLabel.includes('gender');
 
-  if (isStructuredField) {
+  const canUseLocalStructuredValue =
+    !preferredLanguage ||
+    preferredLanguage === 'en' ||
+    Boolean(directYesNo) ||
+    fieldType === 'date' ||
+    fieldType === 'number' ||
+    normalizedLabel.includes('gender') ||
+    normalizedLabel.includes('contact');
+
+  if (isStructuredField && canUseLocalStructuredValue) {
     return {
       englishText: directYesNo || structuredEnglishText,
       canonicalYesNo: fieldType === 'yes_no' ? directYesNo : null,
@@ -1012,7 +1283,7 @@ async function normalizeKycAnswer({
   const completion = await trackOpenAICall(`KYC normalize ${preferredLanguage}`, () =>
     openai.chat.completions.create({
       model: OPENAI_CHAT_MODEL,
-      temperature: 0,
+      ...withSupportedTemperature(OPENAI_CHAT_MODEL, 0),
       messages: [
         {
           role: 'system',
@@ -1059,6 +1330,73 @@ Rules:
   };
 }
 
+async function validateKycAnswerRelevance({
+  text,
+  preferredLanguage,
+  currentFieldLabel,
+  currentFieldType,
+  currentFieldSection,
+  currentFieldPrompt,
+  awaitingReason = false,
+}) {
+  const answer = normalizeTranscriptEncoding(text);
+  if (!answer) {
+    return { relevant: false, confidence: 1, reason: 'empty answer' };
+  }
+
+  const languageName = getKycLanguageName(preferredLanguage || 'en');
+  const completion = await trackOpenAICall('KYC answer relevance', () =>
+    openai.chat.completions.create({
+      model: OPENAI_CHAT_MODEL,
+      ...withSupportedTemperature(OPENAI_CHAT_MODEL, 0),
+      ...withSupportedMaxTokens(OPENAI_CHAT_MODEL, 180),
+      messages: [
+        {
+          role: 'system',
+          content: `You validate whether a patient's short spoken answer belongs to the current MER/KYC form question.
+
+Return ONLY valid JSON:
+{
+  "relevant": true | false,
+  "confidence": 0 to 1,
+  "reason": "short reason"
+}
+
+Rules:
+- Mark true only if the answer directly answers the current question or its required "if yes, give details" follow-up.
+- For yes/no fields, "yes", "no", and clear condition names related to the field are relevant.
+- If awaitingReason is true, accept condition details, disease names, medicine/test/surgery names, and duration/time answers such as "2 years", "six months", or "since childhood" for that same field.
+- If awaitingReason is true, reject only clear answers to a different row, small talk, or unrelated background speech.
+- Mark false for recovery-status answers, confirmations, small talk, background speech, or answers that fit a different medical row.
+- Be strict. If unsure, mark false with confidence 0.6.
+- The patient's language is ${languageName}; understand transliterated Indian English/Hindi/Marathi-style short answers.`,
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            fieldLabel: currentFieldLabel || '',
+            fieldPrompt: currentFieldPrompt || '',
+            fieldType: currentFieldType || 'text',
+            fieldSection: currentFieldSection || '',
+            awaitingReason: Boolean(awaitingReason),
+            answer,
+          }),
+        },
+      ],
+    })
+  );
+
+  const parsed = extractJsonObject(completion.choices[0]?.message?.content || '{}');
+  return {
+    relevant: parsed.relevant === true,
+    confidence:
+      typeof parsed.confidence === 'number'
+        ? Math.max(0, Math.min(1, parsed.confidence))
+        : 0.5,
+    reason: String(parsed.reason || '').trim(),
+  };
+}
+
 async function trackOpenAICall(label, fn) {
   openaiCallCount++;
   const n = openaiCallCount;
@@ -1097,7 +1435,7 @@ app.post('/api/analyze', async (req, res) => {
       () =>
         openai.chat.completions.create({
           model: OPENAI_CHAT_MODEL,
-          temperature: 0.3,
+          ...withSupportedTemperature(OPENAI_CHAT_MODEL, 0.3),
           messages,
         })
     );
@@ -1183,7 +1521,7 @@ app.post('/api/voice', upload.single('audio'), async (req, res) => {
         () =>
           openai.chat.completions.create({
             model: OPENAI_CHAT_MODEL,
-            temperature: 0.3,
+            ...withSupportedTemperature(OPENAI_CHAT_MODEL, 0.3),
             messages: [
               {
                 role: 'system',
@@ -1265,13 +1603,15 @@ app.post('/api/tts', async (req, res) => {
 
 app.post('/api/kyc/localize-text', async (req, res) => {
   try {
-    const { text, languageCode } = req.body;
+    const { text, languageCode, transcriptScript = false } = req.body;
     if (!text || typeof text !== 'string') {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    const localizedText = await localizeKycText(text, (languageCode || 'en').trim().toLowerCase());
-    res.json({ text: localizedText });
+    const localizedText = await localizeKycText(text, (languageCode || 'en').trim().toLowerCase(), {
+      transcriptScript,
+    });
+    res.json({ text: stripInlineYesDetailInstruction(localizedText) });
   } catch (err) {
     console.error('KYC LOCALIZE ERROR:', err);
     res.status(500).json({ error: err.message });
@@ -1296,6 +1636,37 @@ app.post('/api/kyc/normalize-answer', async (req, res) => {
     res.json(result);
   } catch (err) {
     console.error('KYC NORMALIZE ERROR:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/kyc/validate-answer-relevance', async (req, res) => {
+  try {
+    const {
+      text,
+      preferredLanguage,
+      currentFieldLabel,
+      currentFieldType,
+      currentFieldSection,
+      currentFieldPrompt,
+      awaitingReason,
+    } = req.body;
+    if (!text || typeof text !== 'string') {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    const result = await validateKycAnswerRelevance({
+      text,
+      preferredLanguage: (preferredLanguage || 'en').trim().toLowerCase(),
+      currentFieldLabel,
+      currentFieldType,
+      currentFieldSection,
+      currentFieldPrompt,
+      awaitingReason,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error('KYC RELEVANCE ERROR:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1364,8 +1735,8 @@ EXAMPLES OF GOOD RESPONSES:
     const completion = await trackOpenAICall('KYC conversational response', () =>
       openai.chat.completions.create({
         model: OPENAI_CHAT_MODEL,
-        temperature: 0.7,
-        max_tokens: 150,
+        ...withSupportedTemperature(OPENAI_CHAT_MODEL, 0.7),
+        ...withSupportedMaxTokens(OPENAI_CHAT_MODEL, 150),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage },
@@ -1482,7 +1853,7 @@ OUTPUT FORMAT:
     const completion = await trackOpenAICall("KYC extract fields", () =>
       openai.chat.completions.create({
         model: OPENAI_CHAT_MODEL,
-        temperature: 0.1,
+        ...withSupportedTemperature(OPENAI_CHAT_MODEL, 0.1),
         messages,
       })
     );
@@ -1509,10 +1880,46 @@ app.post('/api/kyc/transcribe', upload.single('audio'), async (req, res) => {
     const currentFieldType = (req.body.currentFieldType || 'text').trim().toLowerCase();
     const currentFieldSection = (req.body.currentFieldSection || '').trim();
     const speechHints = (req.body.speechHints || '').trim();
+    let transcriptText = '';
+
+    if (isHindiHinglishLanguage(preferredLanguage) && process.env.SARVAM_API_KEY) {
+      const FormData = (await import('form-data')).default;
+      const form = new FormData();
+      form.append('file', fs.createReadStream(filePath));
+      form.append('model', 'saaras:v3');
+      form.append('mode', 'transcribe');
+      form.append('language_code', getSarvamLanguageCode(preferredLanguage));
+
+      const sarvamRes = await fetch('https://api.sarvam.ai/speech-to-text', {
+        method: 'POST',
+        headers: {
+          'API-Subscription-Key': process.env.SARVAM_API_KEY,
+          ...form.getHeaders(),
+        },
+        body: form,
+      });
+
+      const { data: sarvamData, rawText } = await readJsonResponseSafe(sarvamRes);
+      if (!sarvamRes.ok) {
+        throw new Error(extractSarvamErrorMessage(sarvamData, rawText));
+      }
+
+      transcriptText = String(
+        sarvamData.transcript ||
+          sarvamData.text ||
+          sarvamData?.diarized_transcript?.entries
+            ?.map((entry) => entry.text || entry.transcript || '')
+            .join(' ') ||
+          '',
+      ).trim();
+    }
 
     const promptParts = [
       'This is KYC intake speech transcription.',
       'Transcribe exactly what the speaker says. Keep names and spelling accurate.',
+      isHindiHinglishLanguage(preferredLanguage)
+        ? 'The speaker may use Hinglish: Hindi sentence structure mixed with English medical words like BP, sugar, thyroid, cholesterol, surgery.'
+        : null,
       currentFieldLabel ? `Current form field: ${currentFieldLabel}` : null,
       speechHints ? `Important names/terms: ${speechHints}` : null,
     ].filter(Boolean);
@@ -1528,11 +1935,13 @@ app.post('/api/kyc/transcribe', upload.single('audio'), async (req, res) => {
       transcriptionConfig.language = preferredLanguage;
     }
 
-    const transcription = await trackOpenAICall("KYC transcribe", () =>
-      openai.audio.transcriptions.create(transcriptionConfig)
-    );
+    if (!transcriptText) {
+      const transcription = await trackOpenAICall("KYC transcribe", () =>
+        openai.audio.transcriptions.create(transcriptionConfig)
+      );
+      transcriptText = transcription.text?.trim() || '';
+    }
 
-    const transcriptText = transcription.text?.trim() || '';
     const normalized = await normalizeKycAnswer({
       text: transcriptText,
       preferredLanguage: preferredLanguage || 'en',
@@ -1675,14 +2084,14 @@ app.post('/api/beyondpresence/start-session', async (req, res) => {
         const genderTag = f.genderRestriction && f.genderRestriction !== 'all'
           ? ` [${f.genderRestriction.toUpperCase()} ONLY]`
           : '';
-        const promptText = f.prompt || f.label;
+        const promptText = stripInlineYesDetailInstruction(f.prompt || f.label);
         return `${i + 1}. ${promptText}${genderTag}`;
       })
       .join('\n');
 
     const fieldListText =
       preferredLanguage && preferredLanguage !== 'en'
-        ? await localizeKycText(fieldListBase, preferredLanguage)
+        ? stripInlineYesDetailInstruction(await localizeKycText(fieldListBase, preferredLanguage))
         : fieldListBase;
 
     const firstFieldPrompt =
@@ -1690,18 +2099,20 @@ app.post('/api/beyondpresence/start-session', async (req, res) => {
       kycFields[0]?.prompt ||
       `What is your ${String(kycFields[0]?.label || 'application number').toLowerCase()}?`;
 
-    const baseGreetingText = `Hi, my name is Dr. Christiana. Let's get started with your medical examination report. ${firstFieldPrompt}`;
+    const baseGreetingText = `Hi, my name is Dr. Tara. Let's start your medical check-up. ${firstFieldPrompt}`;
     const greetingText =
-      preferredLanguage && preferredLanguage !== 'en'
-        ? await localizeKycText(baseGreetingText, preferredLanguage)
-        : baseGreetingText;
+      preferredLanguage === 'hi'
+        ? 'हाय, मेरा नाम Dr. Tara है। चलिए आपका मेडिकल चेक-अप शुरू करते हैं। आपका application number क्या है?'
+        : preferredLanguage && preferredLanguage !== 'en'
+          ? await localizeKycText(baseGreetingText, preferredLanguage)
+          : baseGreetingText;
 
     const speechInstruction =
       providerLanguage !== requestedLanguage
-        ? `Speak only in ${languageName} for all patient-facing responses. The provider session language is set to ${providerLanguage} only for compatibility, so do not switch to English or Hindi unless the patient asks.`
-        : `Speak only in ${languageName} for all patient-facing responses.`;
+        ? `${getKycSpeechStyleInstruction(preferredLanguage)} The provider session language is set to ${providerLanguage} only for compatibility.`
+        : getKycSpeechStyleInstruction(preferredLanguage);
 
-    const kycSystemPrompt = `You are Dr. Christiana, a warm professional doctor helping a patient complete a KYC medical form during a video call.
+    const kycSystemPrompt = `You are Dr. Tara, a warm professional doctor helping a patient complete a KYC medical form during a video call.
 
 ${speechInstruction} Be empathetic, calm, natural, and brief. Keep each reply under 35 words.
 
@@ -1709,6 +2120,7 @@ Ask these fields one by one in order. The list below is the phrasing to follow f
 ${fieldListText}
 
 Rules:
+- You are not a general chatbot. Never answer personal questions, medical advice questions, or requests outside this form. Continue asking the current KYC field instead.
 - Ask only one field at a time and wait for the answer before moving on.
 - If gender is male, skip all [FEMALE ONLY] fields silently. If gender is female, skip all [MALE ONLY] fields silently.
 - Never use ALL CAPS, shouting, or dramatic emphasis.
@@ -1716,7 +2128,14 @@ Rules:
 - Do not repeat the patient's previous answer back verbatim unless a clarification is genuinely needed.
 - Use a short acknowledgment, then move directly to the next question.
 - For names or dates, only ask for clarification if the answer was genuinely unclear or incomplete.
-- For yes/no fields, ask naturally. If the patient says yes without details and details are needed, ask one short follow-up for the reason.
+- For yes/no fields, ask only the yes/no question first. Do not append "if yes, give details" to the same question.
+- A yes/no field question must stop after asking for Yes/No. In Hindi, end with "हाँ या नहीं?" and nothing about details.
+- Never say "अगर हाँ", "agar haan", "if yes", "toh detail", "thoda detail", or "please give details" inside the main yes/no question.
+- If a yes/no field has requiresReasonOnYes and the patient says No, move to the next numbered field.
+- If a yes/no field has requiresReasonOnYes and the patient says Yes, ask two short follow-ups before moving on: first ask for the condition/reason ("Which one?" or "Please tell me the condition or reason."), then ask "Since how long?".
+- Keep those two follow-up answers attached to the same numbered field. Never use them as answers for the next field.
+- Do not ask recovery status, current status, treatment advice, or confirmation questions unless that exact field needs a missing answer.
+- Never move to the next numbered field until both required yes-detail follow-ups have been answered or the patient says they do not know.
 - If an answer is unclear, ask for clarification once, then continue.
 - Do not diagnose, do not give medical advice, and do not mention progress milestones.
 - When all fields are done, congratulate the patient warmly and say the form is complete.`;
@@ -1731,13 +2150,16 @@ Rules:
         'x-api-key': BEY_API_KEY,
       },
       body: JSON.stringify({
-        name: 'Dr. Christiana Managed Agent',
+        name: 'Dr. Tara Managed Agent',
         avatar_id: avatarId,
         system_prompt: kycSystemPrompt,
         language: providerLanguage,
         greeting: greetingText,
         max_session_length_minutes: 30,
-        llm: { type: 'openai' },
+        llm: {
+          type: 'openai',
+          temperature: 1,
+        },
       }),
     });
 
