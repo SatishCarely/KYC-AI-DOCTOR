@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import './index.css'
 
 // NOTE: React.StrictMode is intentionally removed here.
 // StrictMode causes components to mount twice in development,

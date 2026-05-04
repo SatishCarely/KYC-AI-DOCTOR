@@ -1,4 +1,4 @@
-//new code
+﻿//new code
 
 import React, { useState, useRef, useEffect } from "react";
 import ConverxAILogoFull from "./assets/converxai-logo-full.png";
@@ -7,6 +7,22 @@ import BeyondPresenceStream from "./BeyondPresenceStream";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min?url";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { Room, Track } from "livekit-client";
+import {
+  Camera,
+  CameraOff,
+  DoorOpen,
+  MessageSquare,
+  Mic,
+  MicOff,
+  MonitorUp,
+  MoreHorizontal,
+  PhoneOff,
+  Radio,
+  ScreenShareOff,
+  SwitchCamera,
+  Users,
+} from "lucide-react";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE_URL ||
@@ -64,7 +80,7 @@ const getMojibakeByte = (char) => {
   return WINDOWS_1252_MOJIBAKE_BYTES[code] ?? null;
 };
 
-const hasMojibakeMarker = (value) => /[ÃÂâà]/.test(String(value || ""));
+const hasMojibakeMarker = (value) => /[ÃƒÃ‚Ã¢Ã ]/.test(String(value || ""));
 
 const repairMojibakeSegment = (value) => {
   const raw = String(value || "");
@@ -123,18 +139,18 @@ const YES_ANSWER_VALUES = new Set([
   "ho",
   "hoy",
   "hoi",
-  "हां",
-  "हाँ",
-  "हा",
-  "हो",
+  "à¤¹à¤¾à¤‚",
+  "à¤¹à¤¾à¤",
+  "à¤¹à¤¾",
+  "à¤¹à¥‹",
   "si",
-  "sí",
+  "sÃ­",
   "oui",
   "true",
-  "हो",
-  "होय",
-  "हाँ",
-  "हां",
+  "à¤¹à¥‹",
+  "à¤¹à¥‹à¤¯",
+  "à¤¹à¤¾à¤",
+  "à¤¹à¤¾à¤‚",
 ]);
 const NO_ANSWER_VALUES = new Set([
   "no",
@@ -144,21 +160,21 @@ const NO_ANSWER_VALUES = new Set([
   "nahi",
   "nahi",
   "naahi",
-  "नहीं",
-  "नही",
-  "नाहि",
+  "à¤¨à¤¹à¥€à¤‚",
+  "à¤¨à¤¹à¥€",
+  "à¤¨à¤¾à¤¹à¤¿",
   "no",
   "non",
   "false",
-  "नहीं",
-  "नही",
-  "नाही",
+  "à¤¨à¤¹à¥€à¤‚",
+  "à¤¨à¤¹à¥€",
+  "à¤¨à¤¾à¤¹à¥€",
 ]);
 
 const parseYesNoAnswer = (text) => {
   const t = normalizeTranscriptEncoding(text || "")
     .toLowerCase()
-    .replace(/[,\s。।.!?;:]+$/g, "")
+    .replace(/[,\sã€‚à¥¤.!?;:]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!t) return null;
@@ -173,12 +189,12 @@ const parseYesNoAnswer = (text) => {
   if (YES_ANSWER_VALUES.has(indicNormalized)) return "Yes";
   if (NO_ANSWER_VALUES.has(indicNormalized)) return "No";
 
-  if (/^(yes|haan ji|ha ji|haan|ha|ho|hoy|hoi|si|sí|oui)\b/.test(t)) return "Yes";
+  if (/^(yes|haan ji|ha ji|haan|ha|ho|hoy|hoi|si|sÃ­|oui)\b/.test(t)) return "Yes";
   if (/^(no|nahi|nahi|naahi|non)\b/.test(t)) return "No";
   if (/^(yes|haan|ha|ho)\b/.test(indicNormalized)) return "Yes";
   if (/^(no|nahi|naahi)\b/.test(indicNormalized)) return "No";
-  if (/^(हां|हाँ|हा|हो)(?:\s|$)/.test(t)) return "Yes";
-  if (/^(नहीं|नही|नाहि|नाही)(?:\s|$)/.test(t)) return "No";
+  if (/^(à¤¹à¤¾à¤‚|à¤¹à¤¾à¤|à¤¹à¤¾|à¤¹à¥‹)(?:\s|$)/.test(t)) return "Yes";
+  if (/^(à¤¨à¤¹à¥€à¤‚|à¤¨à¤¹à¥€|à¤¨à¤¾à¤¹à¤¿|à¤¨à¤¾à¤¹à¥€)(?:\s|$)/.test(t)) return "No";
   return null;
 };
 
@@ -209,7 +225,7 @@ function isLikelyRelevantImplicitYes(field, text) {
     return hasAny(["asthma", "bronchitis", "wheezing", "tuberculosis", "breathing", "breath"]);
   }
   if (id === "blood_disorder") {
-    return hasAny(["anemia", "anaemia", "leukemia", "blood", "circulatory"]);
+    return hasAny(["anemia", "anaemia", "leukemia", "leukaemia", "circulatory"]);
   }
   if (id === "liver_disorder") {
     return hasAny(["liver", "cirrhosis", "hepatitis", "jaundice", "stomach", "colitis", "indigestion"]);
@@ -239,10 +255,39 @@ function isLikelyRelevantImplicitYes(field, text) {
     return hasAny(["hiv", "aids", "std", "sexually", "syphilis", "gonorrhea"]);
   }
   if (id === "treatment_medication") {
-    return hasAny(["medicine", "medication", "tablet", "capsule", "insulin", "therapy", "treatment", "surgery", "operation", "hospital", "hospitalized", "admitted", "under treatment", "taking"]);
+    return hasAny([
+      "medicine",
+      "medication",
+      "tablet",
+      "capsule",
+      "insulin",
+      "therapy",
+      "treatment",
+      "surgery",
+      "operation",
+      "hospital",
+      "hospitalized",
+      "admitted",
+      "under treatment",
+      "taking",
+      "angioplasty",
+      "angiogram",
+      "stent",
+      "bypass",
+      "dialysis",
+      "chemotherapy",
+      "chemo",
+      "radiation",
+      "transplant",
+      "implant",
+      "replacement",
+    ]);
   }
   if (id.startsWith("hospitalization_") || id === "other_hospitalization_details") {
-    return hasAny(["hospital", "hospitalized", "admitted", "fever", "poisoning", "accident", "c section", "stone", "appendix", "appendicectomy", "piles", "hernia", "malaria", "typhoid", "dengue", "gastroenteritis", "dehydration"]);
+    return hasAny(["hospital", "hospitalized", "admitted", "fever", "poisoning", "accident", "c section", "stone", "appendix", "appendicectomy", "piles", "hernia", "malaria", "typhoid", "dengue", "gastroenteritis", "dehydration", "surgery", "operation", "fracture", "ankle", "elbow", "hand", "leg"]);
+  }
+  if (id === "travel_outside_india") {
+    return isLikelyTravelDestinationText(normalized);
   }
   if (id === "off_work_illness") {
     return hasAny(["off work", "leave", "illness", "sick"]);
@@ -311,25 +356,25 @@ const normalizeIndicSpeechText = (value) =>
     .replace(/\u0928\u094c|\u0928\u0909/gi, " nine ")
     .replace(/\u0926\u0938|\u0926\u0939\u093e/gi, " ten ")
     .replace(/\u0939\u091c\u093c\u093e\u0930|\u0939\u091c\u093e\u0930/gi, " thousand ")
-    .replace(/ऑक्टोबर|अक्टूबर|ऑक्टूबर/gi, " october ")
-    .replace(/सप्टेंबर|सितंबर|सितम्बर/gi, " september ")
-    .replace(/नवंबर|नोव्हेंबर/gi, " november ")
-    .replace(/डिसेंबर|दिसंबर/gi, " december ")
-    .replace(/शून्य|सुन्य|सु्न्य/gi, " zero ")
-    .replace(/एक/gi, " one ")
-    .replace(/दोन|दो/gi, " two ")
-    .replace(/तीन/gi, " three ")
-    .replace(/चार/gi, " four ")
-    .replace(/पाच/gi, " five ")
-    .replace(/पच्चीस/gi, " twenty five ")
-    .replace(/पचास/gi, " fifty ")
-    .replace(/लाख|लाखों/gi, " lakh ")
-    .replace(/सहा|छह/gi, " six ")
-    .replace(/सात/gi, " seven ")
-    .replace(/आठ/gi, " eight ")
-    .replace(/नऊ|नौ/gi, " nine ")
-    .replace(/दहा|दस/gi, " ten ")
-    .replace(/हजार/gi, " thousand ")
+    .replace(/à¤‘à¤•à¥à¤Ÿà¥‹à¤¬à¤°|à¤…à¤•à¥à¤Ÿà¥‚à¤¬à¤°|à¤‘à¤•à¥à¤Ÿà¥‚à¤¬à¤°/gi, " october ")
+    .replace(/à¤¸à¤ªà¥à¤Ÿà¥‡à¤‚à¤¬à¤°|à¤¸à¤¿à¤¤à¤‚à¤¬à¤°|à¤¸à¤¿à¤¤à¤®à¥à¤¬à¤°/gi, " september ")
+    .replace(/à¤¨à¤µà¤‚à¤¬à¤°|à¤¨à¥‹à¤µà¥à¤¹à¥‡à¤‚à¤¬à¤°/gi, " november ")
+    .replace(/à¤¡à¤¿à¤¸à¥‡à¤‚à¤¬à¤°|à¤¦à¤¿à¤¸à¤‚à¤¬à¤°/gi, " december ")
+    .replace(/à¤¶à¥‚à¤¨à¥à¤¯|à¤¸à¥à¤¨à¥à¤¯|à¤¸à¥à¥à¤¨à¥à¤¯/gi, " zero ")
+    .replace(/à¤à¤•/gi, " one ")
+    .replace(/à¤¦à¥‹à¤¨|à¤¦à¥‹/gi, " two ")
+    .replace(/à¤¤à¥€à¤¨/gi, " three ")
+    .replace(/à¤šà¤¾à¤°/gi, " four ")
+    .replace(/à¤ªà¤¾à¤š/gi, " five ")
+    .replace(/à¤ªà¤šà¥à¤šà¥€à¤¸/gi, " twenty five ")
+    .replace(/à¤ªà¤šà¤¾à¤¸/gi, " fifty ")
+    .replace(/à¤²à¤¾à¤–|à¤²à¤¾à¤–à¥‹à¤‚/gi, " lakh ")
+    .replace(/à¤¸à¤¹à¤¾|à¤›à¤¹/gi, " six ")
+    .replace(/à¤¸à¤¾à¤¤/gi, " seven ")
+    .replace(/à¤†à¤ /gi, " eight ")
+    .replace(/à¤¨à¤Š|à¤¨à¥Œ/gi, " nine ")
+    .replace(/à¤¦à¤¹à¤¾|à¤¦à¤¸/gi, " ten ")
+    .replace(/à¤¹à¤œà¤¾à¤°/gi, " thousand ")
     .replace(/\bdhohazardha\b/gi, " two thousand ten ")
     .replace(/\bdhohazdha\b/gi, " two thousand ten ")
     .replace(/\bdhoh?az(?:a|aa)r?a?\b/gi, " two thousand ")
@@ -362,15 +407,15 @@ const normalizeIndicSpeechText = (value) =>
     .replace(/\bnav\b/gi, " nine ")
     .replace(/\bdaha\b/gi, " ten ")
     .replace(/\bdas\b/gi, " ten ")
-    .replace(/एकशे|एक शे/gi, " one hundred ")
-    .replace(/दोनशे|दोशे|दोन शे|दो शे/gi, " two hundred ")
-    .replace(/तीनशे|तीन शे/gi, " three hundred ")
-    .replace(/चारशे|चार शे/gi, " four hundred ")
-    .replace(/पाचशे|पाच शे/gi, " five hundred ")
-    .replace(/सहाशे|सहा शे|छह सौ/gi, " six hundred ")
-    .replace(/सातशे|सात शे/gi, " seven hundred ")
-    .replace(/आठशे|आठ शे/gi, " eight hundred ")
-    .replace(/नऊशे|नौ सौ|नऊ शे/gi, " nine hundred ")
+    .replace(/à¤à¤•à¤¶à¥‡|à¤à¤• à¤¶à¥‡/gi, " one hundred ")
+    .replace(/à¤¦à¥‹à¤¨à¤¶à¥‡|à¤¦à¥‹à¤¶à¥‡|à¤¦à¥‹à¤¨ à¤¶à¥‡|à¤¦à¥‹ à¤¶à¥‡/gi, " two hundred ")
+    .replace(/à¤¤à¥€à¤¨à¤¶à¥‡|à¤¤à¥€à¤¨ à¤¶à¥‡/gi, " three hundred ")
+    .replace(/à¤šà¤¾à¤°à¤¶à¥‡|à¤šà¤¾à¤° à¤¶à¥‡/gi, " four hundred ")
+    .replace(/à¤ªà¤¾à¤šà¤¶à¥‡|à¤ªà¤¾à¤š à¤¶à¥‡/gi, " five hundred ")
+    .replace(/à¤¸à¤¹à¤¾à¤¶à¥‡|à¤¸à¤¹à¤¾ à¤¶à¥‡|à¤›à¤¹ à¤¸à¥Œ/gi, " six hundred ")
+    .replace(/à¤¸à¤¾à¤¤à¤¶à¥‡|à¤¸à¤¾à¤¤ à¤¶à¥‡/gi, " seven hundred ")
+    .replace(/à¤†à¤ à¤¶à¥‡|à¤†à¤  à¤¶à¥‡/gi, " eight hundred ")
+    .replace(/à¤¨à¤Šà¤¶à¥‡|à¤¨à¥Œ à¤¸à¥Œ|à¤¨à¤Š à¤¶à¥‡/gi, " nine hundred ")
     .replace(/\bek\s+shay\b/gi, " one hundred ")
     .replace(/\bek\s+she\b/gi, " one hundred ")
     .replace(/\bdon\s+shay\b/gi, " two hundred ")
@@ -400,7 +445,7 @@ const normalizeIndicSpeechText = (value) =>
     .replace(/\bekonaainshi\b/gi, " seventy nine ")
     .replace(/\bekon\saishi\b/gi, " seventy nine ")
     .replace(/\bekon\saenshi\b/gi, " seventy nine ")
-    .replace(/एकोणऐंशी|एकोणऐशी/gi, " seventy nine ")
+    .replace(/à¤à¤•à¥‹à¤£à¤à¤‚à¤¶à¥€|à¤à¤•à¥‹à¤£à¤à¤¶à¥€/gi, " seventy nine ")
     .replace(/\bhajar\b/gi, " thousand ")
     .replace(/\bhazaar\b/gi, " thousand ")
     .replace(/\bhazar\b/gi, " thousand ")
@@ -1256,6 +1301,10 @@ const PRESET_DEMO_KYC_FIELDS = [
     type: "yes_no",
     section: "Travel",
     prompt: "Do you intend to travel outside India within the next 3 months?",
+    followUpIfYes: "Please tell me the destination.",
+    reasonPromptLabel: "If yes, please tell me the destination",
+    reasonResponseId: "travel_outside_india_reason",
+    requiresReasonOnYes: true,
     genderRestriction: "all",
     acroYesFieldName: "p2_q12_yes",
     acroNoFieldName: "p2_q12_no",
@@ -1342,16 +1391,96 @@ const isPresetDemoKycFields = (fields = []) =>
 
 const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
   {
+    fieldId: "application_no",
+    type: "text",
+    page: 1,
+    inputX: 214,
+    inputY: 184,
+    width: 132,
+    height: 12,
+    fontSize: 8,
+  },
+  {
+    fieldId: "life_to_be_assured_name",
+    type: "text",
+    page: 1,
+    inputX: 214,
+    inputY: 202,
+    width: 132,
+    height: 12,
+    fontSize: 8,
+  },
+  {
+    fieldId: "date_of_birth",
+    type: "date",
+    page: 1,
+    inputX: 214,
+    inputY: 220,
+    width: 132,
+    height: 12,
+    fontSize: 8,
+  },
+  {
+    fieldId: "gender",
+    type: "text",
+    page: 1,
+    inputX: 428,
+    inputY: 220,
+    width: 116,
+    height: 12,
+    fontSize: 8,
+  },
+  {
+    fieldId: "nominee_name",
+    type: "text",
+    page: 1,
+    inputX: 214,
+    inputY: 238,
+    width: 132,
+    height: 12,
+    fontSize: 8,
+  },
+  {
+    fieldId: "nominee_dob",
+    type: "date",
+    page: 1,
+    inputX: 428,
+    inputY: 238,
+    width: 116,
+    height: 12,
+    fontSize: 8,
+  },
+  {
+    fieldId: "contact_no",
+    type: "text",
+    page: 1,
+    inputX: 214,
+    inputY: 256,
+    width: 132,
+    height: 12,
+    fontSize: 8,
+  },
+  {
+    fieldId: "education_details",
+    type: "text",
+    page: 1,
+    inputX: 428,
+    inputY: 307,
+    width: 116,
+    height: 13,
+    fontSize: 7,
+  },
+  {
     fieldId: "chest_pain_history",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 523,
-    noX: 495,
-    noY: 523,
-    reasonX: 519,
-    reasonY: 516,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 392,
+    noX: 399,
+    noY: 392,
+    reasonX: 428,
+    reasonY: 383,
+    reasonWidth: 116,
     reasonHeight: 24,
     reasonResponseId: "chest_pain_history_reason",
   },
@@ -1359,13 +1488,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "hypertension",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 541,
-    noX: 495,
-    noY: 541,
-    reasonX: 519,
-    reasonY: 535,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 414,
+    noX: 399,
+    noY: 414,
+    reasonX: 428,
+    reasonY: 408,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "hypertension_reason",
   },
@@ -1373,13 +1502,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "diabetes_thyroid",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 557,
-    noX: 495,
-    noY: 557,
-    reasonX: 519,
-    reasonY: 551,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 430,
+    noX: 399,
+    noY: 430,
+    reasonX: 428,
+    reasonY: 424,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "diabetes_thyroid_reason",
   },
@@ -1387,13 +1516,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "respiratory",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 574,
-    noX: 495,
-    noY: 574,
-    reasonX: 519,
-    reasonY: 568,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 452,
+    noX: 399,
+    noY: 452,
+    reasonX: 428,
+    reasonY: 443,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "respiratory_reason",
   },
@@ -1401,13 +1530,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "blood_disorder",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 590,
-    noX: 495,
-    noY: 590,
-    reasonX: 519,
-    reasonY: 584,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 472,
+    noX: 399,
+    noY: 472,
+    reasonX: 428,
+    reasonY: 466,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "blood_disorder_reason",
   },
@@ -1415,13 +1544,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "liver_disorder",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 607,
-    noX: 495,
-    noY: 607,
-    reasonX: 519,
-    reasonY: 601,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 493,
+    noX: 399,
+    noY: 493,
+    reasonX: 428,
+    reasonY: 484,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "liver_disorder_reason",
   },
@@ -1429,13 +1558,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "disability_congenital",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 624,
-    noX: 495,
-    noY: 624,
-    reasonX: 519,
-    reasonY: 618,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 514,
+    noX: 399,
+    noY: 514,
+    reasonX: 428,
+    reasonY: 508,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "disability_congenital_reason",
   },
@@ -1443,13 +1572,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "cancer_tumour",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 640,
-    noX: 495,
-    noY: 640,
-    reasonX: 519,
-    reasonY: 634,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 530,
+    noX: 399,
+    noY: 530,
+    reasonX: 428,
+    reasonY: 524,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "cancer_tumour_reason",
   },
@@ -1457,13 +1586,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "kidney_disease",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 662,
-    noX: 495,
-    noY: 662,
-    reasonX: 519,
-    reasonY: 655,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 552,
+    noX: 399,
+    noY: 552,
+    reasonX: 428,
+    reasonY: 543,
+    reasonWidth: 116,
     reasonHeight: 24,
     reasonResponseId: "kidney_disease_reason",
   },
@@ -1471,13 +1600,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "epilepsy_nervous",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 681,
-    noX: 495,
-    noY: 681,
-    reasonX: 519,
-    reasonY: 675,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 572,
+    noX: 399,
+    noY: 572,
+    reasonX: 428,
+    reasonY: 563,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "epilepsy_nervous_reason",
   },
@@ -1485,13 +1614,13 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "ent_disorder",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 697,
-    noX: 495,
-    noY: 697,
-    reasonX: 519,
-    reasonY: 691,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 598,
+    noX: 399,
+    noY: 598,
+    reasonX: 428,
+    reasonY: 592,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "ent_disorder_reason",
   },
@@ -1499,183 +1628,249 @@ const PRESET_DEMO_KYC_FIELD_MAPPINGS = [
     fieldId: "musculoskeletal",
     type: "yes_no",
     page: 1,
-    yesX: 453,
-    yesY: 714,
-    noX: 495,
-    noY: 714,
-    reasonX: 519,
-    reasonY: 708,
-    reasonWidth: 38,
+    yesX: 350,
+    yesY: 614,
+    noX: 399,
+    noY: 614,
+    reasonX: 428,
+    reasonY: 608,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "musculoskeletal_reason",
   },
   {
     fieldId: "diagnostic_tests",
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 76,
-    noX: 495,
-    noY: 76,
-    reasonX: 519,
-    reasonY: 67,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 637,
+    noX: 399,
+    noY: 637,
+    reasonX: 428,
+    reasonY: 626,
+    reasonWidth: 116,
     reasonHeight: 28,
     reasonResponseId: "diagnostic_tests_reason",
   },
   {
     fieldId: "hiv_std",
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 103,
-    noX: 495,
-    noY: 103,
-    reasonX: 519,
-    reasonY: 97,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 672,
+    noX: 399,
+    noY: 672,
+    reasonX: 428,
+    reasonY: 663,
+    reasonWidth: 116,
     reasonHeight: 18,
     reasonResponseId: "hiv_std_reason",
   },
   {
     fieldId: "treatment_medication",
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 132,
-    noX: 495,
-    noY: 132,
-    reasonX: 519,
-    reasonY: 122,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 702,
+    noX: 399,
+    noY: 702,
+    reasonX: 428,
+    reasonY: 690,
+    reasonWidth: 116,
     reasonHeight: 28,
     reasonResponseId: "treatment_medication_reason",
   },
   {
     fieldId: "hospitalization_fever_normal",
+    skipPdf: true,
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 155,
-    noX: 495,
-    noY: 155,
-    reasonX: 519,
-    reasonY: 149,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 728,
+    noX: 399,
+    noY: 728,
+    reasonX: 428,
+    reasonY: 719,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "hospitalization_fever_normal_reason",
   },
   {
     fieldId: "hospitalization_food_poisoning_normal",
+    skipPdf: true,
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 172,
-    noX: 495,
-    noY: 172,
-    reasonX: 519,
-    reasonY: 166,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 745,
+    noX: 399,
+    noY: 745,
+    reasonX: 428,
+    reasonY: 739,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "hospitalization_food_poisoning_normal_reason",
   },
   {
     fieldId: "hospitalization_accident_alright",
+    skipPdf: true,
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 188,
-    noX: 495,
-    noY: 188,
-    reasonX: 519,
-    reasonY: 182,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 762,
+    noX: 399,
+    noY: 762,
+    reasonX: 428,
+    reasonY: 756,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "hospitalization_accident_alright_reason",
   },
   {
     fieldId: "hospitalization_common_surgeries",
+    skipPdf: true,
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 216,
-    noX: 495,
-    noY: 216,
-    reasonX: 519,
-    reasonY: 204,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 781,
+    noX: 399,
+    noY: 781,
+    reasonX: 428,
+    reasonY: 767,
+    reasonWidth: 116,
     reasonHeight: 36,
     reasonResponseId: "hospitalization_common_surgeries_reason",
   },
   {
     fieldId: "hospitalization_infection_recovery",
+    skipPdf: true,
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 243,
-    noX: 495,
-    noY: 243,
-    reasonX: 519,
-    reasonY: 237,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 806,
+    noX: 399,
+    noY: 806,
+    reasonX: 428,
+    reasonY: 800,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "hospitalization_infection_recovery_reason",
   },
   {
     fieldId: "other_hospitalization_details",
+    skipPdf: true,
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 260,
-    noX: 495,
-    noY: 260,
-    reasonX: 519,
-    reasonY: 254,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 806,
+    noX: 399,
+    noY: 806,
+    reasonX: 428,
+    reasonY: 800,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "other_hospitalization_details_reason",
   },
   {
     fieldId: "off_work_illness",
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 279,
-    noX: 495,
-    noY: 279,
-    reasonX: 519,
-    reasonY: 271,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 733,
+    noX: 399,
+    noY: 733,
+    reasonX: 428,
+    reasonY: 722,
+    reasonWidth: 116,
     reasonHeight: 24,
     reasonResponseId: "off_work_illness_reason",
   },
   {
     fieldId: "other_disease",
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 300,
-    noX: 495,
-    noY: 300,
-    reasonX: 519,
-    reasonY: 294,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 760,
+    noX: 399,
+    noY: 760,
+    reasonX: 428,
+    reasonY: 754,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "other_disease_reason",
   },
   {
     fieldId: "travel_outside_india",
     type: "yes_no",
-    page: 2,
-    yesX: 453,
-    yesY: 316,
-    noX: 495,
-    noY: 316,
-    reasonX: 519,
-    reasonY: 310,
-    reasonWidth: 38,
+    page: 1,
+    yesX: 350,
+    yesY: 776,
+    noX: 399,
+    noY: 776,
+    reasonX: 428,
+    reasonY: 770,
+    reasonWidth: 116,
     reasonHeight: 15,
     reasonResponseId: "travel_outside_india_reason",
+  },
+  {
+    fieldId: "height_cm",
+    type: "number",
+    page: 2,
+    inputX: 428,
+    inputY: 62,
+    width: 116,
+    height: 13,
+    fontSize: 8,
+  },
+  {
+    fieldId: "weight_kg",
+    type: "number",
+    page: 2,
+    inputX: 428,
+    inputY: 78,
+    width: 116,
+    height: 13,
+    fontSize: 8,
+  },
+  {
+    fieldId: "habits_addictions",
+    type: "text",
+    page: 2,
+    inputX: 428,
+    inputY: 96,
+    width: 116,
+    height: 28,
+    fontSize: 7,
+  },
+  {
+    fieldId: "existing_insurance_cover",
+    type: "text",
+    page: 2,
+    inputX: 428,
+    inputY: 120,
+    width: 116,
+    height: 13,
+    fontSize: 8,
+  },
+  {
+    fieldId: "all_life_cover",
+    type: "number",
+    page: 2,
+    inputX: 428,
+    inputY: 140,
+    width: 116,
+    height: 20,
+    fontSize: 8,
+  },
+  {
+    fieldId: "all_ci_cover",
+    type: "number",
+    page: 2,
+    inputX: 428,
+    inputY: 163,
+    width: 116,
+    height: 13,
+    fontSize: 8,
   },
 ];
 
@@ -1943,6 +2138,23 @@ const formatDateOfBirthForPdf = (value) => {
   return raw;
 };
 
+const isReasonableKycDateValue = (value) => {
+  const match = String(value || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!match) return false;
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+  const currentYear = new Date().getFullYear();
+  if (day < 1 || day > 31 || month < 1 || month > 12) return false;
+  if (year < 1900 || year > currentYear) return false;
+  const parsed = new Date(year, month - 1, day);
+  return (
+    parsed.getFullYear() === year &&
+    parsed.getMonth() === month - 1 &&
+    parsed.getDate() === day
+  );
+};
+
 const formatGenderForPdf = (value) => {
   const raw = String(value || "").trim();
   const normalizedValue = normalizeIndicSpeechText(raw)
@@ -1954,9 +2166,12 @@ const formatGenderForPdf = (value) => {
     [
       "m",
       "male",
+      "mens",
+      "men",
       "man",
       "boy",
       "mail",
+      "may",
       "email",
       "meal",
       "mael",
@@ -1964,6 +2179,7 @@ const formatGenderForPdf = (value) => {
       "deal",
       "deel",
       "dill",
+      "mill",
       "dale",
     ].includes(normalizedValue)
   )
@@ -2100,6 +2316,28 @@ const getPhoneDigitsForKyc = (value) =>
 
 const combinePartialKycAnswerText = (field, previousValue, nextText) => {
   const next = String(nextText || "").trim();
+  if (isFullNameField(field)) {
+    const previousName = formatNameForPdf(previousValue);
+    const nextName = formatNameForPdf(next);
+    if (!previousName || !looksLikeCompleteFullName(previousName)) return next;
+    if (!nextName) return previousName;
+
+    const previousParts = previousName.split(/\s+/).filter(Boolean);
+    const nextParts = nextName.split(/\s+/).filter(Boolean);
+    const normalizedPreviousParts = new Set(previousParts.map((part) => normalize(part)));
+    const nextIsSpelledFragment = /(?:\b[a-z]\b[\s.-]*){2,}/i.test(next);
+
+    if (
+      nextIsSpelledFragment ||
+      nextParts.length <= 1 ||
+      nextParts.every((part) => normalizedPreviousParts.has(normalize(part)))
+    ) {
+      return previousName;
+    }
+
+    return nextParts.length >= previousParts.length ? nextName : previousName;
+  }
+
   if (!isPhoneKycField(field)) return next;
 
   const previousDigits = getPhoneDigitsForKyc(previousValue);
@@ -2111,18 +2349,18 @@ const combinePartialKycAnswerText = (field, previousValue, nextText) => {
   return `${previousDigits} ${next}`;
 };
 
+const getSpelledNameCompact = (input) => {
+  const matches = String(input || "").match(/(?:\b[a-z]\b[\s-]*){3,}/gi);
+  if (!matches?.length) return "";
+
+  return (
+    matches
+      .map((part) => part.replace(/[^a-z]/gi, "").toLowerCase())
+      .sort((a, b) => b.length - a.length)[0] || ""
+  );
+};
+
 const formatNameForPdf = (value) => {
-  const extractSpelledCompact = (input) => {
-    const matches = String(input || "").match(/(?:\b[a-z]\b[\s-]*){4,}/gi);
-    if (!matches?.length) return "";
-
-    return (
-      matches
-        .map((part) => part.replace(/[^a-z]/gi, "").toLowerCase())
-        .sort((a, b) => b.length - a.length)[0] || ""
-    );
-  };
-
   let cleaned = String(value ?? "")
     .replace(
       /^(my name is|name is|this is|i am|i'm|mera naam|mera naam hai|naam hai)\s+/i,
@@ -2131,9 +2369,20 @@ const formatNameForPdf = (value) => {
     .replace(/[^\w\s'.-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  const spelledCompact = extractSpelledCompact(value);
+  const spelledCompact = getSpelledNameCompact(value);
 
   const nameFixes = {
+    "so fish chowdering": "Satish Chaudhary",
+    "satish chalk": "Satish Chaudhary",
+    "satish choubhary": "Satish Chaudhary",
+    "satish choudhary": "Satish Chaudhary",
+    "satish chaudhry": "Satish Chaudhary",
+    chalk: "Chaudhary",
+    choubhary: "Chaudhary",
+    choudhary: "Chaudhary",
+    chaudhry: "Chaudhary",
+    "sapna chog": "Sapna Chaudhary",
+    chog: "Chaudhary",
     "sankop kira": "Sankalp Khira",
     "sankalp kira": "Sankalp Khira",
     "sankalp khira": "Sankalp Khira",
@@ -2147,6 +2396,9 @@ const formatNameForPdf = (value) => {
     sankalpkhira: "Sankalp Khira",
     sankalpakhira: "Sankalp Khira",
     sankalpkheera: "Sankalp Khira",
+    satishchaudhary: "Satish Chaudhary",
+    satishchoudhary: "Satish Chaudhary",
+    satishchoubhary: "Satish Chaudhary",
   };
 
   const lowerCleaned = cleaned.toLowerCase();
@@ -2158,6 +2410,8 @@ const formatNameForPdf = (value) => {
 
   if (spelledCompact && spelledNameFixes[spelledCompact]) {
     cleaned = spelledNameFixes[spelledCompact];
+  } else if (spelledCompact && /^[a-z](?:\s+[a-z]){3,}$/i.test(cleaned)) {
+    cleaned = spelledCompact;
   }
 
   return cleaned
@@ -2178,7 +2432,8 @@ const formatKycAnswerForPdf = (field, value) => {
     zero:'0', one:'1', two:'2', three:'3', four:'4',
     five:'5', six:'6', seven:'7', eight:'8', nine:'9'
   };
-  const tokens = raw.toLowerCase()
+  const normalizedRaw = normalizeIndicSpeechText(raw);
+  const tokens = normalizedRaw.toLowerCase()
     .replace(/[^a-z0-9\s]/g, '')
     .split(/\s+/)
     .filter(Boolean);
@@ -2188,6 +2443,8 @@ const formatKycAnswerForPdf = (field, value) => {
   if (allDigits && tokens.length >= 2) {
     return tokens.map(t => digitWords[t] ?? t).join('');
   }
+  const numericValue = formatNumericForPdf(normalizedRaw);
+  if (/^\d+$/.test(String(numericValue || "").trim())) return String(numericValue).trim();
   return raw;
 }
 
@@ -2296,7 +2553,7 @@ const extractReasonFromAffirmativeAnswer = (text) => {
     .replace(/\s+/g, " ")
     .replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, "");
   const withoutAffirmative = cleanedRaw.replace(
-    /^(?:yes|yeah|yep|ya|true|haan(?:\s+ji)?|han(?:\s+ji)?|ha(?:\s+ji)?|ho|hoy|hoi|si|sí|oui|हाँ|हां|हा|हो)(?:$|\b|[\s,.:;-]+)[\s,.:;-]*/iu,
+    /^(?:yes|yeah|yep|ya|true|haan(?:\s+ji)?|han(?:\s+ji)?|ha(?:\s+ji)?|ho|hoy|hoi|si|sÃ­|oui|à¤¹à¤¾à¤|à¤¹à¤¾à¤‚|à¤¹à¤¾|à¤¹à¥‹)(?:$|\b|[\s,.:;-]+)[\s,.:;-]*/iu,
     "",
   ).trim();
   const detailText = withoutAffirmative === cleanedRaw ? cleanedRaw : withoutAffirmative;
@@ -2306,7 +2563,7 @@ const extractReasonFromAffirmativeAnswer = (text) => {
   );
 
   const withoutYesPrefix = raw
-    .replace(/^(yes|yeah|yep|haan|ha|ho|hoy|hoi|हो|होय)\b[\s,:-]*/i, "")
+    .replace(/^(yes|yeah|yep|haan|ha|ho|hoy|hoi|à¤¹à¥‹|à¤¹à¥‹à¤¯)\b[\s,:-]*/i, "")
     .trim();
   if (!withoutYesPrefix) return "";
 
@@ -2325,6 +2582,9 @@ const isKycFieldAwaitingReason = (field, responses = {}) =>
 const getKycReasonFollowUpPrompt = (field, phase = "detail") => {
   if (phase === "duration") return "Since how long?";
   const label = String(field?.label || field?.prompt || "this condition").trim();
+  if (/travel outside india|destination/i.test(label)) {
+    return "Please tell me the destination.";
+  }
   if (/cancer|tumou?r|cyst|growth|lymph/i.test(label)) return "Which one?";
   if (/medication|medicine|treatment/i.test(label)) {
     return "Please tell me the reason for medication and name of medicine.";
@@ -2341,7 +2601,16 @@ const combineKycReasonParts = (detail = "", duration = "") => {
   const cleanDuration = extractReasonFromAffirmativeAnswer(duration)
     .replace(/^(since|from|for)\b[\s,.:;-]*/i, "")
     .trim();
-  return [cleanDetail, cleanDuration].filter(Boolean).join(", ");
+  const seen = new Set();
+  return [cleanDetail, cleanDuration]
+    .filter(Boolean)
+    .filter((part) => {
+      const key = normalize(part);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(", ");
 };
 
 const hasDurationPhrase = (text) => {
@@ -2351,10 +2620,19 @@ const hasDurationPhrase = (text) => {
     .replace(/\s+/g, " ")
     .trim();
   if (!normalized) return false;
-  return /\b(since|from|for|ago|pehle|pahle|se|mahine|month|months|saal|year|years|din|days|week|weeks|hafte|haftey|childhood)\b/.test(
-    normalized,
+  return (
+    /\b(ago|pehle|pahle|mahine|months?|saal|years?|din|days?|weeks?|hafte|haftey|childhood)\b/.test(
+      normalized,
+    ) ||
+    /\b(since|from|for)\s+(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a|an|few|couple)\b/.test(
+      normalized,
+    )
   );
 };
+
+const hasCompleteInlineKycReason = (reason, sourceText = "") =>
+  hasMeaningfulKycValue(reason) &&
+  (hasDurationPhrase(reason) || hasDurationPhrase(sourceText));
 
 const stripInlineYesDetailInstruction = (text) =>
   String(text || "")
@@ -2363,7 +2641,7 @@ const stripInlineYesDetailInstruction = (text) =>
     .replace(/\s*agar\s+h(?:aa|a)n[, ]+[^.?!]*(?:[.?!]|$)/gi, " ")
     .replace(/\s*agar\s+yes[, ]+[^.?!]*(?:[.?!]|$)/gi, " ")
     .replace(/\s*(?:yes|no)\s+(?:boliye|bataiye|bataye)\.?\s*/gi, " ")
-    .replace(/\s*(?:अगर|यदि)\s+(?:हाँ|हां|हा)[, ]*[^।.?!]*(?:[।.?!]|$)/gi, " ")
+    .replace(/\s*(?:à¤…à¤—à¤°|à¤¯à¤¦à¤¿)\s+(?:à¤¹à¤¾à¤|à¤¹à¤¾à¤‚|à¤¹à¤¾)[, ]*[^à¥¤.?!]*(?:[à¥¤.?!]|$)/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -2376,39 +2654,39 @@ const getHindiTranscriptFallback = (text) => {
     .replace(/\s+/g, " ")
     .trim();
   const yesNo = parseYesNoAnswer(clean);
-  if (yesNo === "Yes") return "हाँ";
-  if (yesNo === "No") return "नहीं";
+  if (yesNo === "Yes") return "à¤¹à¤¾à¤";
+  if (yesNo === "No") return "à¤¨à¤¹à¥€à¤‚";
 
   const contains = (...terms) => terms.some((term) => normalized.includes(term));
 
   if (contains("my name is dr tara", "mera naam dr tara")) {
-    return "हाय, मेरा नाम Dr. Tara है। चलिए आपका मेडिकल चेक-अप शुरू करते हैं। आपका application number क्या है?";
+    return "à¤¹à¤¾à¤¯, à¤®à¥‡à¤°à¤¾ à¤¨à¤¾à¤® Dr. Tara à¤¹à¥ˆà¥¤ à¤šà¤²à¤¿à¤ à¤†à¤ªà¤•à¤¾ à¤®à¥‡à¤¡à¤¿à¤•à¤² à¤šà¥‡à¤•-à¤…à¤ª à¤¶à¥à¤°à¥‚ à¤•à¤°à¤¤à¥‡ à¤¹à¥ˆà¤‚à¥¤ à¤†à¤ªà¤•à¤¾ application number à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
   }
-  if (contains("application number")) return "आपका application number क्या है?";
-  if (contains("nominee") && contains("date", "birth")) return "Nominee की date of birth क्या है?";
-  if (contains("nominee")) return "Nominee का पूरा नाम क्या है?";
-  if (contains("full name", "poora naam", "pura naam")) return "आपका पूरा नाम क्या है? कृपया साफ-साफ बताइए।";
-  if (contains("date of birth", "dob")) return "आपकी date of birth क्या है? दिन, महीना और साल बताइए।";
-  if (contains("gender")) return "आपका gender क्या है?";
-  if (contains("contact number", "mobile number")) return "आपका contact number क्या है?";
-  if (contains("education", "qualification")) return "आपकी education details बताइए। आपकी highest qualification क्या है?";
-  if (contains("female specific", "pregnancy")) return "आप male हैं, इसलिए female-specific questions skip कर रहे हैं।";
+  if (contains("application number")) return "à¤†à¤ªà¤•à¤¾ application number à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
+  if (contains("nominee") && contains("date", "birth")) return "Nominee à¤•à¥€ date of birth à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
+  if (contains("nominee")) return "Nominee à¤•à¤¾ à¤ªà¥‚à¤°à¤¾ à¤¨à¤¾à¤® à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
+  if (contains("full name", "poora naam", "pura naam")) return "à¤†à¤ªà¤•à¤¾ à¤ªà¥‚à¤°à¤¾ à¤¨à¤¾à¤® à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ? à¤•à¥ƒà¤ªà¤¯à¤¾ à¤¸à¤¾à¤«-à¤¸à¤¾à¤« à¤¬à¤¤à¤¾à¤‡à¤à¥¤";
+  if (contains("date of birth", "dob")) return "à¤†à¤ªà¤•à¥€ date of birth à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ? à¤¦à¤¿à¤¨, à¤®à¤¹à¥€à¤¨à¤¾ à¤”à¤° à¤¸à¤¾à¤² à¤¬à¤¤à¤¾à¤‡à¤à¥¤";
+  if (contains("gender")) return "à¤†à¤ªà¤•à¤¾ gender à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
+  if (contains("contact number", "mobile number")) return "à¤†à¤ªà¤•à¤¾ contact number à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
+  if (contains("education", "qualification")) return "à¤†à¤ªà¤•à¥€ education details à¤¬à¤¤à¤¾à¤‡à¤à¥¤ à¤†à¤ªà¤•à¥€ highest qualification à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
+  if (contains("female specific", "pregnancy")) return "à¤†à¤ª male à¤¹à¥ˆà¤‚, à¤‡à¤¸à¤²à¤¿à¤ female-specific questions skip à¤•à¤° à¤°à¤¹à¥‡ à¤¹à¥ˆà¤‚à¥¤";
   if (contains("chest pain", "heart attack", "palpitations", "breathlessness")) {
-    return "क्या आपको कभी chest pain, heart attack, palpitations या चलते समय breathlessness हुई है? हाँ या नहीं?";
+    return "à¤•à¥à¤¯à¤¾ à¤†à¤ªà¤•à¥‹ à¤•à¤­à¥€ chest pain, heart attack, palpitations à¤¯à¤¾ à¤šà¤²à¤¤à¥‡ à¤¸à¤®à¤¯ breathlessness à¤¹à¥à¤ˆ à¤¹à¥ˆ? à¤¹à¤¾à¤ à¤¯à¤¾ à¤¨à¤¹à¥€à¤‚?";
   }
   if (contains("hypertension", "high bp", "high cholesterol", "blood pressure")) {
-    return "क्या आपको hypertension, high BP या high cholesterol की problem है? हाँ या नहीं?";
+    return "à¤•à¥à¤¯à¤¾ à¤†à¤ªà¤•à¥‹ hypertension, high BP à¤¯à¤¾ high cholesterol à¤•à¥€ problem à¤¹à¥ˆ? à¤¹à¤¾à¤ à¤¯à¤¾ à¤¨à¤¹à¥€à¤‚?";
   }
   if (contains("diabetes", "thyroid", "sugar", "endocrine")) {
-    return "क्या आपको high sugar, diabetes, thyroid या कोई endocrine problem है? हाँ या नहीं?";
+    return "à¤•à¥à¤¯à¤¾ à¤†à¤ªà¤•à¥‹ high sugar, diabetes, thyroid à¤¯à¤¾ à¤•à¥‹à¤ˆ endocrine problem à¤¹à¥ˆ? à¤¹à¤¾à¤ à¤¯à¤¾ à¤¨à¤¹à¥€à¤‚?";
   }
   if (contains("asthma", "bronchitis", "wheezing", "breathing")) {
-    return "क्या आपको asthma, bronchitis, wheezing, TB या breathing problem है? हाँ या नहीं?";
+    return "à¤•à¥à¤¯à¤¾ à¤†à¤ªà¤•à¥‹ asthma, bronchitis, wheezing, TB à¤¯à¤¾ breathing problem à¤¹à¥ˆ? à¤¹à¤¾à¤ à¤¯à¤¾ à¤¨à¤¹à¥€à¤‚?";
   }
-  if (contains("kab se", "since how long", "how long")) return "कब से है?";
-  if (contains("which one", "condition", "reason", "detail")) return "कौन-सी problem है? कृपया condition या reason बताइए।";
+  if (contains("kab se", "since how long", "how long")) return "à¤•à¤¬ à¤¸à¥‡ à¤¹à¥ˆ?";
+  if (contains("which one", "condition", "reason", "detail")) return "à¤•à¥Œà¤¨-à¤¸à¥€ problem à¤¹à¥ˆ? à¤•à¥ƒà¤ªà¤¯à¤¾ condition à¤¯à¤¾ reason à¤¬à¤¤à¤¾à¤‡à¤à¥¤";
   if (contains("carely note", "call has ended")) {
-    return "Carely note: कॉल खत्म हो गई है। जो fields बाकी रह गई हैं उन्हें Not captured mark किया गया है ताकि report review और download हो सके।";
+    return "Carely note: à¤•à¥‰à¤² à¤–à¤¤à¥à¤® à¤¹à¥‹ à¤—à¤ˆ à¤¹à¥ˆà¥¤ à¤œà¥‹ fields à¤¬à¤¾à¤•à¥€ à¤°à¤¹ à¤—à¤ˆ à¤¹à¥ˆà¤‚ à¤‰à¤¨à¥à¤¹à¥‡à¤‚ Not captured mark à¤•à¤¿à¤¯à¤¾ à¤—à¤¯à¤¾ à¤¹à¥ˆ à¤¤à¤¾à¤•à¤¿ report review à¤”à¤° download à¤¹à¥‹ à¤¸à¤•à¥‡à¥¤";
   }
 
   return clean;
@@ -2430,9 +2708,6 @@ const normalizeTranscriptDisplayAnswer = (text) => {
 const getFastTranscriptDisplayText = (text, languageCode = "en") => {
   const clean = normalizeTranscriptDisplayAnswer(text);
   if (!clean || languageCode !== "hi") return clean;
-  const fallback = getHindiTranscriptFallback(clean);
-  if (fallback && fallback !== clean) return fallback;
-  if (!needsHindiTranscriptFallback(clean)) return clean;
   return clean;
 };
 
@@ -2451,13 +2726,30 @@ const isNoisyTranscriptLine = (role, text) => {
     .trim();
   if (!normalized) return true;
 
+  const isTranslationPrompt =
+    /\b(rewrite|hinglish|text doge|main tayyar|bhej do|simple hinglish|which text|what do you want|convert|translation|translate|carely kyc text)\b/i.test(
+      normalized,
+    ) ||
+    /(कृपया\s+बताएं|कृपया\s+बताइए).*(क्या\s+करना\s+चाहते|कौन.?सा\s+(टेक्स्ट|पाठ)|रूपांतरित|बदलवाना|अनुवाद|हिंदी\s+में)/i.test(
+      clean,
+    ) ||
+    /आप\s+क्या\s+जानना\s+चाहते\s+हैं/i.test(clean);
+
   if (role === "user") {
-    if (/\b(rewrite|hinglish|text doge|main tayyar|bhej do|simple hinglish)\b/i.test(normalized)) {
+    if (isTranslationPrompt) {
       return true;
     }
-    if (/^(?:kya\b|क्या)/i.test(clean) && /(\?|？|हां या नहीं|हाँ या नहीं)/i.test(clean)) {
+    if (/^(?:kya\b|\u0915\u094d\u092f\u093e)/i.test(clean) && /(\?|ï¼Ÿ|\u0939\u093e\u0902 \u092f\u093e \u0928\u0939\u0940\u0902|\u0939\u093e\u0901 \u092f\u093e \u0928\u0939\u0940\u0902)/i.test(clean)) {
       return true;
     }
+  }
+
+  if (role === "assistant" && isTranslationPrompt) {
+    return true;
+  }
+
+  if (role === "assistant" && /^(\u0939\u093e\u0901|\u0939\u093e\u0902|\u0928\u0939\u0940\u0902|\u0928\u0939\u0940|yes|no)$/i.test(clean.trim())) {
+    return true;
   }
 
   return false;
@@ -2477,44 +2769,32 @@ const isYesNoTranscriptText = (text) => Boolean(parseYesNoAnswer(text));
 
 const isYesNoQuestionTranscriptText = (text) => {
   const clean = normalizeTranscriptEncoding(text);
-  return /(?:हाँ|हां)\s+या\s+नहीं|yes\s+or\s+no|haan\s+ya\s+no|haan\s+ya\s+nahi/i.test(clean);
+  return /(?:à¤¹à¤¾à¤|à¤¹à¤¾à¤‚)\s+à¤¯à¤¾\s+à¤¨à¤¹à¥€à¤‚|yes\s+or\s+no|haan\s+ya\s+no|haan\s+ya\s+nahi/i.test(clean);
 };
 
-const isQuestionTranscriptText = (text) => /[?？]|क्या|कौन|कब|का नाम|date of birth/i.test(
+const isQuestionTranscriptText = (text) => /[?ï¼Ÿ]|à¤•à¥à¤¯à¤¾|à¤•à¥Œà¤¨|à¤•à¤¬|à¤•à¤¾ à¤¨à¤¾à¤®|date of birth/i.test(
   normalizeTranscriptEncoding(text),
 );
 
 const formatTranscriptMessageText = (msg, languageCode = "en") => {
   const lineText = normalizeTranscriptDisplayAnswer(msg?.displayContent || msg?.content || "");
+  if (languageCode === "en") {
+    return lineText
+      .replace(/\s*[\u0900-\u097F][\u0900-\u097F\sà¥¤?]*$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
   if (languageCode === "hi") return getFastTranscriptDisplayText(lineText, languageCode);
   return lineText;
 };
 
 const buildVisibleTranscriptEntries = (messages = [], languageCode = "en") => {
   const entries = [];
-  const seenAssistantQuestions = new Set();
 
   for (const msg of messages) {
     if (msg?.isHidden || msg?.isSystem) continue;
     const text = formatTranscriptMessageText(msg, languageCode);
     if (!text || isNoisyTranscriptLine(msg.role, text)) continue;
-
-    const lastAssistant = [...entries].reverse().find((entry) => entry.role === "assistant");
-
-    if (
-      msg.role === "user" &&
-      isYesNoTranscriptText(text) &&
-      lastAssistant &&
-      !isYesNoQuestionTranscriptText(lastAssistant.text)
-    ) {
-      continue;
-    }
-
-    if (msg.role === "assistant" && isQuestionTranscriptText(text)) {
-      const key = normalize(text);
-      if (seenAssistantQuestions.has(key)) continue;
-      seenAssistantQuestions.add(key);
-    }
 
     const previous = entries[entries.length - 1];
     if (previous?.role === msg.role && normalize(previous.text) === normalize(text)) continue;
@@ -2528,6 +2808,28 @@ const getRecoveredTranscriptValue = (fieldId, messages = []) => {
   const visible = messages.filter((msg) => !msg?.isHidden && !msg?.isSystem);
   const textFor = (msg) => normalizeTranscriptEncoding(msg?.content || msg?.displayContent || "");
 
+  if (fieldId === "application_no") {
+    let applicationPromptSeen = false;
+    const applicationParts = [];
+    for (const msg of visible) {
+      const text = textFor(msg);
+      if (msg.role === "assistant" && getTranscriptPromptFieldId(text) === "application_no") {
+        applicationPromptSeen = true;
+        applicationParts.length = 0;
+        continue;
+      }
+      if (applicationPromptSeen && msg.role === "user") {
+        applicationParts.push(text);
+        const formatted = formatKycAnswerForPdf({ id: "application_no", type: "text" }, applicationParts.join(" "));
+        if (/^\d{3,}$/.test(String(formatted || "").trim())) return formatted;
+        continue;
+      }
+      if (applicationPromptSeen && msg.role === "assistant" && applicationParts.length) {
+        applicationPromptSeen = false;
+      }
+    }
+  }
+
   if (fieldId === "contact_no") {
     for (let idx = visible.length - 1; idx >= 0; idx -= 1) {
       const msg = visible[idx];
@@ -2539,15 +2841,46 @@ const getRecoveredTranscriptValue = (fieldId, messages = []) => {
 
   if (fieldId === "nominee_dob") {
     let nomineeDobPromptSeen = false;
+    const nomineeDobParts = [];
+    const tryNomineeDobCandidate = (parts = []) => {
+      const candidates = [];
+      const joined = parts.filter(Boolean).join(" ").trim();
+      if (joined) candidates.push(joined);
+      if (parts.length >= 2) {
+        candidates.push(`${parts[0] || ""} ${parts[parts.length - 1] || ""}`.trim());
+      }
+      if (parts.length >= 3) {
+        candidates.push(parts.slice(-3).join(" ").trim());
+        candidates.push(`${parts[0] || ""} ${parts.slice(-2).join(" ")}`.trim());
+      }
+
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        const normalizedCandidate = normalizeIndicSpeechText(candidate)
+          .replace(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\1\b/gi, "$1")
+          .replace(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)\s+\1\s+\2\b/gi, "$1 $2")
+          .replace(/\s+/g, " ")
+          .trim();
+        const formatted = formatDateOfBirthForPdf(normalizedCandidate);
+        if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(formatted)) return formatted;
+      }
+      return "";
+    };
     for (const msg of visible) {
       const text = textFor(msg);
       if (msg.role === "assistant" && /nominee/i.test(text) && /date|birth|dob/i.test(text)) {
         nomineeDobPromptSeen = true;
+        nomineeDobParts.length = 0;
         continue;
       }
       if (nomineeDobPromptSeen && msg.role === "user") {
-        const formatted = formatDateOfBirthForPdf(text);
+        nomineeDobParts.push(text);
+        const formatted = tryNomineeDobCandidate(nomineeDobParts);
         if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(formatted)) return formatted;
+        continue;
+      }
+      if (nomineeDobPromptSeen && msg.role === "assistant" && nomineeDobParts.length) {
+        nomineeDobPromptSeen = false;
       }
     }
   }
@@ -2564,6 +2897,7 @@ const getTranscriptPromptFieldId = (text) => {
     .trim();
 
   if (!normalized) return null;
+  const hasRaw = (pattern) => pattern.test(raw);
   if (normalized.includes("critical illness") || normalized.includes(" ci cover")) return "all_ci_cover";
   if (normalized.includes("habits") || normalized.includes("addictions") || normalized.includes("smoking") || normalized.includes("tobacco") || normalized.includes("alcohol") || normalized.includes("drugs")) {
     return "habits_addictions";
@@ -2571,20 +2905,23 @@ const getTranscriptPromptFieldId = (text) => {
   if (normalized.includes("existing insurance")) return "existing_insurance_cover";
   if (normalized.includes("life cover")) return "all_life_cover";
   if (normalized.includes("weight")) return "weight_kg";
-  if (normalized.includes("contact number") || normalized.includes("mobile number")) return "contact_no";
-  if (normalized.includes("application number")) return "application_no";
-  if (normalized.includes("nominee") && normalized.includes("date") && normalized.includes("birth")) {
+  if (normalized.includes("contact number") || normalized.includes("mobile number") || hasRaw(/à¤¸à¤‚à¤ªà¤°à¥à¤•|à¤®à¥‹à¤¬à¤¾à¤‡à¤²|à¤«à¥‹à¤¨/)) return "contact_no";
+  if (normalized.includes("application number") || hasRaw(/application number|à¤†à¤µà¥‡à¤¦à¤¨|à¤à¤ªà¥à¤²à¤¿à¤•à¥‡à¤¶à¤¨/)) return "application_no";
+  if (normalized.includes("gender") || hasRaw(/à¤²à¤¿à¤‚à¤—/)) return "gender";
+  if (
+    (normalized.includes("nominee") && normalized.includes("date") && normalized.includes("birth")) ||
+    hasRaw(/à¤¨à¤¾à¤®à¤¿à¤¤.*(à¤œà¤¨à¥à¤®|à¤¤à¤¿à¤¥à¤¿)|nominee.*(dob|date of birth)/i)
+  ) {
     return "nominee_dob";
   }
-  if (normalized.includes("nominee") && (normalized.includes("name") || normalized.includes("naam"))) {
+  if ((normalized.includes("nominee") && (normalized.includes("name") || normalized.includes("naam"))) || hasRaw(/à¤¨à¤¾à¤®à¤¿à¤¤.*(à¤¨à¤¾à¤®|à¤µà¥à¤¯à¤•à¥à¤¤à¤¿)/)) {
     return "nominee_name";
   }
-  if (/पूरा\s+नाम/.test(raw) || normalized.includes("full name") || normalized.includes("poora naam") || normalized.includes("pura naam")) {
+  if (/à¤ªà¥‚à¤°à¤¾\s+à¤¨à¤¾à¤®|à¤¨à¤¾à¤® à¤•à¥à¤¯à¤¾/.test(raw) || normalized.includes("full name") || normalized.includes("poora naam") || normalized.includes("pura naam")) {
     return "life_to_be_assured_name";
   }
-  if (normalized.includes("date of birth") || normalized.includes("dob")) return "date_of_birth";
-  if (normalized.includes("gender")) return "gender";
-  if (normalized.includes("education") || normalized.includes("qualification")) return "education_details";
+  if (normalized.includes("date of birth") || normalized.includes("dob") || hasRaw(/à¤œà¤¨à¥à¤®.*(à¤¤à¤¿à¤¥à¤¿|à¤¦à¤¿à¤¨|à¤®à¤¹à¥€à¤¨à¤¾|à¤µà¤°à¥à¤·)|à¤œà¤¨à¥à¤®à¤¤à¤¿à¤¥à¤¿/)) return "date_of_birth";
+  if (normalized.includes("education") || normalized.includes("qualification") || hasRaw(/à¤¶à¤¿à¤•à¥à¤·à¤¾|à¤¯à¥‹à¤—à¥à¤¯à¤¤à¤¾/)) return "education_details";
   if (normalized.includes("chest pain") || normalized.includes("heart attack") || normalized.includes("palpitations") || normalized.includes("breathlessness")) {
     return "chest_pain_history";
   }
@@ -2615,20 +2952,14 @@ const getTranscriptPromptFieldId = (text) => {
   if (normalized.includes("epilepsy") || normalized.includes("nervous") || normalized.includes("tremors") || normalized.includes("paralysis") || normalized.includes("psychiatric")) {
     return "epilepsy_nervous";
   }
-  if (normalized.includes("eye") || normalized.includes("ear") || normalized.includes("nose") || normalized.includes("throat")) {
+  if (/\b(eye|ear|nose|throat)\b/.test(normalized)) {
     return "ent_disorder";
   }
-  if (normalized.includes("back") || normalized.includes("muscle") || normalized.includes("joints") || normalized.includes("arthritis")) {
+  if (/\b(back|muscle|joint|joints|bone|neck|arthritis|gout)\b/.test(normalized)) {
     return "musculoskeletal";
-  }
-  if (normalized.includes("x ray") || normalized.includes("ct scan") || normalized.includes("mri") || normalized.includes("ecg") || normalized.includes("blood test") || normalized.includes("surgery")) {
-    return "diagnostic_tests";
   }
   if (normalized.includes("hiv") || normalized.includes("aids") || normalized.includes("sexually transmitted")) {
     return "hiv_std";
-  }
-  if (normalized.includes("treatment") || normalized.includes("medicine") || normalized.includes("medication")) {
-    return "treatment_medication";
   }
   if (normalized.includes("fever") && normalized.includes("hospital")) return "hospitalization_fever_normal";
   if (normalized.includes("food poisoning")) return "hospitalization_food_poisoning_normal";
@@ -2640,6 +2971,12 @@ const getTranscriptPromptFieldId = (text) => {
     return "hospitalization_infection_recovery";
   }
   if (normalized.includes("other hospitalization")) return "other_hospitalization_details";
+  if (normalized.includes("treatment") || normalized.includes("medicine") || normalized.includes("medication") || normalized.includes("hospitalized") || normalized.includes("undergone surgery")) {
+    return "treatment_medication";
+  }
+  if (normalized.includes("x ray") || normalized.includes("ct scan") || normalized.includes("mri") || normalized.includes("ecg") || normalized.includes("tmt") || normalized.includes("blood test") || normalized.includes("diagnostic test")) {
+    return "diagnostic_tests";
+  }
   if (normalized.includes("10 days") || normalized.includes("work se off") || normalized.includes("off work")) return "off_work_illness";
   if (normalized.includes("other disease") || normalized.includes("ailment") || normalized.includes("habit")) return "other_disease";
   if (normalized.includes("travel") && normalized.includes("india")) return "travel_outside_india";
@@ -2654,13 +2991,16 @@ const cleanRecoveredTranscriptAnswer = (fieldId, text) => {
   if (!clean) return "";
 
   if (fieldId === "application_no") {
-    return formatKycAnswerForPdf({ id: "application_no", type: "text" }, clean);
+    const formatted = formatKycAnswerForPdf({ id: "application_no", type: "text" }, clean);
+    return /^\d{2,}$/.test(String(formatted || "").trim()) ? formatted : "";
   }
   if (fieldId === "date_of_birth") {
-    return formatDateOfBirthForPdf(clean);
+    const formattedDate = formatDateOfBirthForPdf(clean);
+    return isReasonableKycDateValue(formattedDate) ? formattedDate : "";
   }
   if (fieldId === "nominee_dob") {
-    return formatDateOfBirthForPdf(clean.replace(/^and\s+september\b/i, "ninth september"));
+    const formattedDate = formatDateOfBirthForPdf(clean.replace(/^and\s+september\b/i, "ninth september"));
+    return isReasonableKycDateValue(formattedDate) ? formattedDate : "";
   }
   if (fieldId === "gender") {
     return formatGenderForPdf(clean);
@@ -2670,10 +3010,15 @@ const cleanRecoveredTranscriptAnswer = (fieldId, text) => {
     return digits.length >= 10 ? digits.slice(-10) : "";
   }
   if (fieldId === "education_details") {
+    if (isUnsafeKycPdfText(clean)) return "";
     return formatKycAnswerForPdf({ id: "education_details", type: "text" }, clean);
   }
   if (fieldId === "height_cm") {
-    return formatKycAnswerForPdf({ id: "height_cm", type: "number" }, clean);
+    const height = formatKycAnswerForPdf({ id: "height_cm", type: "number" }, clean);
+    const numericHeight = Number(height);
+    return /^\d+(\.\d+)?$/.test(String(height)) && numericHeight >= 100 && numericHeight <= 250
+      ? height
+      : "";
   }
   if (fieldId === "weight_kg") {
     const weight = formatKycAnswerForPdf({ id: "weight_kg", type: "number" }, clean);
@@ -2683,17 +3028,40 @@ const cleanRecoveredTranscriptAnswer = (fieldId, text) => {
       : "";
   }
   if (fieldId === "all_life_cover" || fieldId === "all_ci_cover") {
-    return formatKycAnswerForPdf({ id: fieldId, type: "number" }, clean);
+    const formatted = formatKycAnswerForPdf({ id: fieldId, type: "number" }, clean);
+    return /^\d+(\.\d+)?$/.test(String(formatted || "").trim()) ? formatted : "";
   }
   if (fieldId === "habits_addictions" || fieldId === "existing_insurance_cover") {
     const normalized = normalizeIndicSpeechText(clean).toLowerCase().trim();
+    if (isUnsafeKycPdfText(clean)) return "";
     if (/^(none|no|nil|nothing|nahi|nahin|no cover|not applicable)$/i.test(normalized)) {
       return "No";
+    }
+    if (
+      fieldId === "habits_addictions" &&
+      hasDurationPhrase(normalized) &&
+      !hasHabitKeyword(normalized)
+    ) {
+      return clean;
+    }
+    if (fieldId === "habits_addictions" && !hasHabitKeyword(normalized) && !hasDurationPhrase(normalized)) {
+      return "";
     }
     return clean;
   }
   if (fieldId === "life_to_be_assured_name" || fieldId === "nominee_name") {
-    return formatNameForPdf(clean);
+    const formattedName = formatNameForPdf(clean);
+    const normalizedName = normalize(formattedName);
+    if (
+      isUnsafeKycPdfText(clean) ||
+      /^(top|bill|mail|male|female|other|yes|no|one|two|three|four|five|six|seven|eight|nine|zero|night|now|so|the|t|the t|the dish|dish)$/.test(
+        normalizedName,
+      ) ||
+      /\b(the t|the dish)\b/.test(normalizedName)
+    ) {
+      return "";
+    }
+    return formattedName;
   }
 
   return clean;
@@ -2706,6 +3074,45 @@ const mergeRecoveredNamePart = (previous, next) => {
   if (!current) return prev;
   const prevParts = prev.split(/\s+/).filter(Boolean);
   const currentParts = current.split(/\s+/).filter(Boolean);
+  const normalizedCurrent = normalize(current);
+  const spelledCompact = getSpelledNameCompact(next);
+  if (
+    isUnsafeKycPdfText(current) ||
+    /^(so|the|the t|the dish|dish|top|bill|mail|male|female|yes|no|night|now)$/.test(
+      normalizedCurrent,
+    ) ||
+    /\b(the t|the dish)\b/.test(normalizedCurrent)
+  ) {
+    return prev;
+  }
+  if (spelledCompact) {
+    const fixedSpelled = formatNameForPdf(spelledCompact);
+    const fixedParts = fixedSpelled.split(/\s+/).filter(Boolean);
+    const normalizedPrevParts = prevParts.map((part) => normalize(part));
+    const normalizedFixedParts = fixedParts.map((part) => normalize(part));
+    if (fixedParts.length >= 2) return fixedSpelled;
+    if (
+      fixedParts.length === 1 &&
+      prevParts.length >= 2 &&
+      !normalizedPrevParts.includes(normalizedFixedParts[0])
+    ) {
+      return [...prevParts.slice(0, -1), fixedParts[0]].join(" ");
+    }
+    return prev;
+  }
+  const normalizedPrevParts = prevParts.map((part) => normalize(part));
+  const normalizedCurrentParts = currentParts.map((part) => normalize(part));
+  if (
+    prevParts.length === currentParts.length &&
+    prevParts.length >= 2 &&
+    normalizedPrevParts[0] === normalizedCurrentParts[0] &&
+    normalizedPrevParts.some((part, index) => part !== normalizedCurrentParts[index])
+  ) {
+    return current;
+  }
+  if (prevParts.length >= 2 && currentParts.length <= prevParts.length) {
+    return prev;
+  }
   if (currentParts.length === 1 && prevParts.length >= 1) {
     return [...prevParts.slice(0, -1), currentParts[0]].join(" ");
   }
@@ -2720,13 +3127,78 @@ const KYC_REASON_FIELD_IDS = new Set(
 
 const isReasonKycFieldId = (fieldId) => KYC_REASON_FIELD_IDS.has(fieldId);
 
+const getPresetKycFieldById = (fieldId) =>
+  PRESET_DEMO_KYC_FIELDS.find((field) => field.id === fieldId) || null;
+
+const isLikelyTravelDestinationText = (text) => {
+  const normalized = normalizeIndicSpeechText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized || parseYesNoAnswer(normalized)) return false;
+  if (/^(what|where|sorry|pardon|hello|hi|ok|okay|fine|thank|thanks|please)$/.test(normalized)) {
+    return false;
+  }
+  if (
+    /\b(height|weight|centimeters?|cms?|kgs?|kilograms?|graduate|education|contact|number|phone|lakh|lakhs?|lacs?|crore|crores?|million|policy|cover|insurance)\b/.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+  const tokens = normalized.split(/\s+/).filter(Boolean);
+  if (!tokens.length) return false;
+  if (
+    tokens.every((token) =>
+      /^(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|\d+)$/.test(
+        token,
+      ),
+    )
+  ) {
+    return false;
+  }
+  if (
+    tokens.length === 1 &&
+    tokens[0].length < 3 &&
+    !["uk", "us", "uae"].includes(tokens[0])
+  ) {
+    return false;
+  }
+  return /[a-z]/.test(normalized);
+};
+
+const isDurationOnlyKycReason = (fieldId, text) => {
+  const normalized = normalizeIndicSpeechText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized || !hasDurationPhrase(normalized)) return false;
+  return !isLikelyRelevantImplicitYes(
+    { ...(getPresetKycFieldById(fieldId) || {}), id: fieldId, requiresReasonOnYes: true },
+    normalized,
+  );
+};
+
 const isLikelyNonReasonAnswerForField = (fieldId, text) => {
+  if (isUnsafeKycPdfText(text)) return true;
   const normalized = normalizeIndicSpeechText(text)
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (!normalized) return true;
+  if (/^(let|for|past|since|from|yes|no|okay|ok|fine|thank|thanks|please|condition|reason|details?)$/.test(normalized)) {
+    return true;
+  }
+  if (
+    normalized.split(/\s+/).length <= 2 &&
+    !hasDurationPhrase(normalized) &&
+    !isLikelyRelevantImplicitYes({ id: fieldId, requiresReasonOnYes: true }, normalized)
+  ) {
+    return true;
+  }
   if (
     /^(zero|one|two|three|four|five|six|seven|eight|nine|ten|\d+)(\s+\d+)?$/.test(normalized) &&
     !/\b(months?|years?|days?|weeks?|mahine|saal|hafte|din)\b/.test(normalized)
@@ -2753,12 +3225,56 @@ const isLikelyNonReasonAnswerForField = (fieldId, text) => {
 const sanitizeKycReasonForField = (fieldId, value) => {
   const raw = extractReasonFromAffirmativeAnswer(value);
   if (!raw || isUncapturedLikeKycValue(raw)) return "";
+  if (fieldId === "travel_outside_india") {
+    const cleanedTravel = normalizeCommonReasonForPdf(raw)
+      .replace(/\s+/g, " ")
+      .trim();
+    if (
+      !cleanedTravel ||
+      parseYesNoAnswer(cleanedTravel) ||
+      isLikelyNonReasonAnswerForField(fieldId, cleanedTravel) ||
+      !isLikelyTravelDestinationText(cleanedTravel)
+    ) {
+      return "";
+    }
+    return cleanedTravel;
+  }
   const parts = raw
     .split(/\s*,\s*/)
-    .map((part) => part.trim())
+    .map((part) =>
+      part
+        .replace(/\b(for|since|from|past)$/i, "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    )
     .filter(Boolean)
     .filter((part) => !isLikelyNonReasonAnswerForField(fieldId, part));
-  return parts.slice(0, 2).join(", ");
+  const hasConditionPart = parts.some((part) => !isDurationOnlyKycReason(fieldId, part));
+  const seen = new Set();
+  const uniqueParts = parts.filter((part) => {
+    if (isDurationOnlyKycReason(fieldId, part) && !hasConditionPart) return false;
+    if (
+      fieldId === "habits_addictions" &&
+      !hasHabitKeyword(part) &&
+      !hasDurationPhrase(part)
+    ) {
+      return false;
+    }
+    if (
+      !isDurationOnlyKycReason(fieldId, part) &&
+      !isLikelyRelevantImplicitYes(
+        { ...(getPresetKycFieldById(fieldId) || {}), id: fieldId, requiresReasonOnYes: true },
+        part,
+      )
+    ) {
+      return false;
+    }
+    const key = normalize(part);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  return uniqueParts.slice(0, 2).join(", ");
 };
 
 const recoverKycResponsesFromTranscript = (messages = []) => {
@@ -2766,6 +3282,7 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
   let currentFieldId = null;
   let pendingYesNoFieldId = null;
   let pendingReasonFieldId = null;
+  let pendingTranscriptConfirmation = null;
   const recentUserTexts = [];
 
   for (const msg of messages) {
@@ -2779,12 +3296,6 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
         .replace(/[^a-z0-9\s]/g, " ")
         .replace(/\s+/g, " ")
         .trim();
-      if (normalizedAssistant.includes("insurance cover") && /\b(no|nahi|nahin|none|koi insurance cover nahi)\b/.test(normalizedAssistant)) {
-        recovered.existing_insurance_cover = "No";
-      }
-      if ((normalizedAssistant.includes("habit") || normalizedAssistant.includes("addiction")) && /\b(no|nahi|nahin|none|koi habit nahi)\b/.test(normalizedAssistant)) {
-        recovered.habits_addictions = "No";
-      }
       if (normalizedAssistant.includes("height")) {
         const numericMatch = normalizedAssistant.match(/\b(\d{2,3})\b/);
         const value = numericMatch ? formatHeightCmForPdf(numericMatch[1]) : formatHeightCmForPdf(normalizedAssistant);
@@ -2797,6 +3308,16 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
       }
       if (normalizedAssistant.includes("weight") && normalizedAssistant.includes("habit")) {
         currentFieldId = "habits_addictions";
+      }
+      const clarifiedGender = inferConfirmedClarificationAnswer(
+        { id: "gender" },
+        text,
+      );
+      if (currentFieldId === "gender" && hasMeaningfulKycValue(clarifiedGender)) {
+        pendingTranscriptConfirmation = {
+          fieldId: "gender",
+          value: clarifiedGender,
+        };
       }
       if (normalizedAssistant.includes("life cover")) {
         const lakhMatch = normalizedAssistant.match(/\b(\d+)\s+lakhs?\b/);
@@ -2832,19 +3353,37 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
     recentUserTexts.push(text);
     if (recentUserTexts.length > 6) recentUserTexts.shift();
 
+    if (pendingTranscriptConfirmation) {
+      const confirmation = parseYesNoAnswer(text);
+      if (confirmation === "Yes") {
+        recovered[pendingTranscriptConfirmation.fieldId] =
+          pendingTranscriptConfirmation.value;
+        pendingTranscriptConfirmation = null;
+        continue;
+      }
+      if (confirmation === "No") {
+        pendingTranscriptConfirmation = null;
+        continue;
+      }
+    }
+
     if (pendingReasonFieldId) {
       const reason = extractReasonFromAffirmativeAnswer(text);
+      const existingReason = recovered[`${pendingReasonFieldId}_reason`];
       if (
         hasMeaningfulKycValue(reason) &&
         !isYesNoTranscriptText(reason) &&
-        !isLikelyNonReasonAnswerForField(pendingReasonFieldId, reason)
+        !isLikelyNonReasonAnswerForField(pendingReasonFieldId, reason) &&
+        !(isDurationOnlyKycReason(pendingReasonFieldId, reason) && !hasMeaningfulKycValue(existingReason))
       ) {
         recovered[`${pendingReasonFieldId}_reason`] = combineKycReasonParts(
-          recovered[`${pendingReasonFieldId}_reason`],
+          existingReason,
           reason,
         );
         if (hasDurationPhrase(reason)) {
+          currentFieldId = null;
           pendingReasonFieldId = null;
+          pendingYesNoFieldId = null;
         }
       }
       continue;
@@ -2853,6 +3392,15 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
     if (currentFieldId && isReasonKycFieldId(currentFieldId)) {
       const yesNo = parseYesNoAnswer(text);
       if (yesNo) {
+        if (
+          recovered[currentFieldId] === "Yes" &&
+          hasMeaningfulKycValue(recovered[`${currentFieldId}_reason`])
+        ) {
+          currentFieldId = null;
+          pendingReasonFieldId = null;
+          pendingYesNoFieldId = null;
+          continue;
+        }
         recovered[currentFieldId] = yesNo;
         if (yesNo === "Yes") {
           pendingReasonFieldId = currentFieldId;
@@ -2864,19 +3412,52 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
       const implicitReason = extractReasonFromAffirmativeAnswer(text);
       if (
         hasMeaningfulKycValue(implicitReason) &&
-        !isLikelyNonReasonAnswerForField(currentFieldId, implicitReason)
+        !isLikelyNonReasonAnswerForField(currentFieldId, implicitReason) &&
+        !(isDurationOnlyKycReason(currentFieldId, implicitReason) && !hasMeaningfulKycValue(recovered[`${currentFieldId}_reason`]))
       ) {
         recovered[currentFieldId] = "Yes";
         recovered[`${currentFieldId}_reason`] = combineKycReasonParts(
           recovered[`${currentFieldId}_reason`],
           implicitReason,
         );
-        pendingReasonFieldId = hasDurationPhrase(implicitReason) ? null : currentFieldId;
+        if (hasDurationPhrase(implicitReason)) {
+          pendingReasonFieldId = null;
+          currentFieldId = null;
+        } else {
+          pendingReasonFieldId = currentFieldId;
+        }
       }
       continue;
     }
 
     if (currentFieldId) {
+      if (currentFieldId === "habits_addictions") {
+        const yesNo = parseYesNoAnswer(text);
+        if (yesNo === "No") {
+          recovered.habits_addictions = "No";
+          continue;
+        }
+        if (yesNo === "Yes") {
+          continue;
+        }
+        const cleanHabit = cleanRecoveredTranscriptAnswer(currentFieldId, text);
+        const safeHabit = cleanHabitAnswerForPdf(cleanHabit);
+        if (!hasMeaningfulKycValue(safeHabit)) continue;
+        if (
+          hasDurationPhrase(safeHabit) &&
+          hasMeaningfulKycValue(recovered.habits_addictions) &&
+          hasHabitKeyword(recovered.habits_addictions)
+        ) {
+          recovered.habits_addictions = combineKycReasonParts(
+            recovered.habits_addictions,
+            safeHabit,
+          );
+        } else if (!hasDurationPhrase(safeHabit) && hasHabitKeyword(safeHabit)) {
+          recovered.habits_addictions = safeHabit;
+        }
+        continue;
+      }
+
       const value = cleanRecoveredTranscriptAnswer(currentFieldId, text);
       if (!hasMeaningfulKycValue(value)) continue;
 
@@ -2903,18 +3484,50 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
     }
     if (!candidates.length) continue;
 
+    if (fieldId === "application_no" && !hasMeaningfulKycValue(recovered.application_no)) {
+      const formatted = formatKycAnswerForPdf(
+        { id: "application_no", type: "text" },
+        candidates.join(" "),
+      );
+      if (/^\d{3,}$/.test(String(formatted || "").trim())) recovered.application_no = formatted;
+    }
     if (fieldId === "contact_no" && !hasMeaningfulKycValue(recovered.contact_no)) {
       const digits = candidates.map(getPhoneDigitsForKyc).find((digitsText) => digitsText.length >= 10);
       if (digits) recovered.contact_no = digits.slice(-10);
     }
     if ((fieldId === "date_of_birth" || fieldId === "nominee_dob") && !hasMeaningfulKycValue(recovered[fieldId])) {
-      const joined = candidates.join(" ");
+      const dateCandidates =
+        fieldId === "nominee_dob"
+          ? candidates.filter((candidate) => {
+              const normalized = normalizeIndicSpeechText(candidate).toLowerCase();
+              return (
+                /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/.test(normalized) ||
+                /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|\d{1,4})\b/.test(normalized)
+              );
+            })
+          : candidates;
+      const joined = dateCandidates.join(" ");
       const formatted = formatDateOfBirthForPdf(joined);
-      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(formatted)) recovered[fieldId] = formatted;
+      if (isReasonableKycDateValue(formatted)) recovered[fieldId] = formatted;
     }
     if (fieldId === "education_details" && !hasMeaningfulKycValue(recovered.education_details)) {
       const education = candidates.map((candidate) => cleanRecoveredTranscriptAnswer(fieldId, candidate)).find(Boolean);
       if (education) recovered.education_details = education;
+    }
+    if (
+      fieldId === "habits_addictions" &&
+      (!hasMeaningfulKycValue(recovered.habits_addictions) ||
+        !hasHabitKeyword(recovered.habits_addictions))
+    ) {
+      const habit = candidates.find((candidate) => hasHabitKeyword(candidate));
+      const duration = candidates.find(
+        (candidate) => hasDurationPhrase(candidate) && !hasHabitKeyword(candidate),
+      );
+      if (habit) {
+        recovered.habits_addictions = cleanHabitAnswerForPdf(
+          combineKycReasonParts(habit, duration),
+        );
+      }
     }
   }
 
@@ -2931,7 +3544,7 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
 const isCompleteKycDateFieldValue = (field, value) => {
   if (field?.type !== "date") return true;
   if (isUncapturedKycValue(value)) return true;
-  return /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(String(value || "").trim());
+  return isReasonableKycDateValue(value);
 };
 
 const isCompleteKycPhoneFieldValue = (field, value) => {
@@ -3089,6 +3702,41 @@ const isLikelyAmbientTranscriptText = (text) => {
   );
 };
 
+const isUnsafeKycPdfText = (text) => {
+  const normalized = normalizeTranscriptEncoding(text)
+    .toLowerCase()
+    .replace(/[.,!?]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return true;
+  return /^(good\.?\s*you|good you|i'?m good|oh you'?re back|you'?re back|your back|ur back|are you back|hello|hello\?|help|done|past|i|the|total|what|can you hear me|one second|wait|hold on)$/i.test(
+    normalized,
+  );
+};
+
+const hasHabitKeyword = (text) =>
+  /\b(alcohol|beer|wine|liquor|drink|drinking|smok|smoking|cig|cigarette|beedi|cigar|gutka|snuff|paan|tobacco|drug|drugs)\b/i.test(
+    normalizeIndicSpeechText(text),
+  );
+
+const cleanHabitAnswerForPdf = (value) => {
+  const raw = extractReasonFromAffirmativeAnswer(value)
+    .replace(/(?:\b(?:for|since|from|past)\s*)+$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!raw) return "";
+  if (/^(none|no|nil|nothing|not applicable)$/i.test(raw)) return "No";
+  if (!hasHabitKeyword(raw) && !hasDurationPhrase(raw)) return "";
+  return raw;
+};
+
+const isIncompleteHabitPhrase = (value) =>
+  /\b(?:for|since|from|past)\s*$/i.test(
+    normalizeIndicSpeechText(value)
+      .replace(/[.,!?]+$/g, "")
+      .trim(),
+  );
+
 const stripClarificationPrefix = (text) =>
   String(text || "")
     .trim()
@@ -3199,7 +3847,17 @@ const isLocallyPlausibleKycAnswerForField = (field, rawText, formattedValue = nu
   }
 
   if (normalizedFieldId === "education_details") {
+    if (isUnsafeKycPdfText(raw)) return false;
     return /[a-z0-9]/i.test(normalizedRaw) && !isLikelyNumberOnlySpeech(raw);
+  }
+
+  if (normalizedFieldId === "habits_addictions") {
+    const yesNo = parseYesNoAnswer(raw);
+    if (yesNo === "No") return true;
+    if (yesNo === "Yes") return false;
+    const cleanedHabit = cleanHabitAnswerForPdf(raw);
+    if (!cleanedHabit) return false;
+    return hasHabitKeyword(cleanedHabit) || hasDurationPhrase(cleanedHabit);
   }
 
   return hasMeaningfulKycValue(formatted);
@@ -3214,7 +3872,10 @@ const getAgentClarificationMode = (text) => {
     /\b(is that (correct|right)|did i (get|hear) that right|did i hear you correctly|is this correct|so that'?s .* correct)\b/i.test(
       normalized,
     ) ||
-    /\bi heard .* is that correct\b/i.test(normalized)
+    /\bi heard .* is that correct\b/i.test(normalized) ||
+    /\b(do you mean|did you mean|you mean|i think you meant)\b/i.test(
+      normalized,
+    )
   ) {
     return "confirm";
   }
@@ -3232,6 +3893,23 @@ const getAgentClarificationMode = (text) => {
   }
 
   return null;
+};
+
+const inferConfirmedClarificationAnswer = (field, clarificationText) => {
+  if (!field) return "";
+  const normalized = normalizeIndicSpeechText(clarificationText)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (field.id === "gender") {
+    if (/\bfemale\b|\bwoman\b|\bgirl\b/.test(normalized)) return "Female";
+    if (/\bmale\b|\bman\b|\bboy\b/.test(normalized)) return "Male";
+    if (/\bother\b|\bnon binary\b/.test(normalized)) return "Other";
+  }
+
+  return "";
 };
 
 const isReasonFollowUpText = (text) => {
@@ -3440,6 +4118,12 @@ const resolveAgentAskedFieldIndex = (
     }
   }
 
+  const transcriptPromptFieldId = getTranscriptPromptFieldId(text);
+  if (transcriptPromptFieldId) {
+    const exactIndex = fields.findIndex((field) => field.id === transcriptPromptFieldId);
+    if (exactIndex >= 0) return exactIndex;
+  }
+
   return findReferencedFieldIndexFromAgentText(text, fields, fallbackIndex);
 };
 
@@ -3521,126 +4205,34 @@ const finalizeIncompleteKycResponses = (fields = [], responses = {}) => {
   return { responses: updated, changed };
 };
 
+const markSkippedFieldsAsUncaptured = (
+  fields = [],
+  responses = {},
+  fromIndex = 0,
+  toIndex = 0,
+) => {
+  const updated = { ...responses };
+  let changed = false;
+
+  for (let index = Math.max(0, fromIndex); index < Math.min(toIndex, fields.length); index += 1) {
+    const field = fields[index];
+    if (!field || shouldSkipFieldForGender(field, updated)) continue;
+    if (!isKycFieldComplete(field, updated)) {
+      updated[field.id] = KYC_UNCAPTURED_VALUE;
+      if (field.reasonResponseId) updated[field.reasonResponseId] = "";
+      changed = true;
+    }
+  }
+
+  return { responses: updated, changed };
+};
+
 const getActiveKycPromptLabel = (field, responses = {}) => {
   if (!field) return "";
   if (isKycFieldAwaitingReason(field, responses)) {
     return field.reasonPromptLabel || "If yes, please tell me the reason";
   }
   return field.prompt || field.label;
-};
-
-const extractTranscriptText = (payload) => {
-  if (!payload) return "";
-  if (typeof payload === "string") return normalizeTranscriptEncoding(payload);
-
-  const directCandidates = [
-    payload.text,
-    payload.transcript,
-    payload.message,
-    payload.body,
-    payload.content,
-    payload.data?.text,
-    payload.data?.transcript,
-    payload.data?.message,
-    payload.data?.body,
-    payload.data?.content,
-    payload.payload?.text,
-    payload.payload?.transcript,
-    payload.payload?.message,
-    payload.payload?.content,
-  ];
-
-  for (const candidate of directCandidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return normalizeTranscriptEncoding(candidate);
-    }
-  }
-
-  const collectionCandidates = [
-    payload.content,
-    payload.parts,
-    payload.data?.content,
-    payload.data?.parts,
-    payload.payload?.content,
-    payload.payload?.parts,
-  ];
-
-  for (const collection of collectionCandidates) {
-    if (!Array.isArray(collection)) continue;
-    const joined = collection
-      .map((item) => extractTranscriptText(item))
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-    if (joined) return joined;
-  }
-
-  return "";
-};
-
-const extractTranscriptRole = (payload) => {
-  const roleTokens = [
-    payload?.role,
-    payload?.sender,
-    payload?.speaker,
-    payload?.author_type,
-    payload?.participant_type,
-    payload?.source,
-    payload?.origin,
-    payload?.participant_role,
-    payload?.participant?.role,
-    payload?.author?.role,
-    payload?.data?.role,
-    payload?.data?.sender,
-    payload?.data?.speaker,
-    payload?.data?.author_type,
-    payload?.data?.participant_type,
-    payload?.data?.source,
-    payload?.data?.origin,
-    payload?.type,
-    payload?.event_type,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  const identityTokens = [
-    payload?.identity,
-    payload?.participant?.identity,
-    payload?.author?.name,
-    payload?.name,
-    payload?.author?.type,
-    payload?.data?.identity,
-    payload?.data?.name,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  const combined = `${roleTokens} ${identityTokens}`;
-  if (
-    /(assistant|agent|avatar|doctor|bot|ai|nurse|carely|christiana)/.test(
-      combined,
-    )
-  )
-    return "assistant";
-  if (
-    /(user|patient|human|local|caller|client|member|customer|guest|visitor|end_user)/.test(
-      combined,
-    )
-  )
-    return "user";
-  return null;
-};
-
-const extractCallMessages = (payload) => {
-  if (Array.isArray(payload)) return payload;
-  if (Array.isArray(payload?.data)) return payload.data;
-  if (Array.isArray(payload?.messages)) return payload.messages;
-  if (Array.isArray(payload?.data?.messages)) return payload.data.messages;
-  if (Array.isArray(payload?.call?.messages)) return payload.call.messages;
-  if (Array.isArray(payload?.items)) return payload.items;
-  return [];
 };
 
 const getTranscriptMessageKey = (role, text, rawKey = null) => {
@@ -4261,7 +4853,7 @@ const isAffirmativeValue = (value) => {
 const detectKycLanguage = (text) => {
   const t = String(text || "").trim();
   if (!t) return null;
-  if (/[ऀ-ॿ]/.test(t)) return "hi";
+  if (/[\u0900-\u097F]/.test(t)) return "hi";
   return "en";
 };
 
@@ -4327,24 +4919,39 @@ const fitTextForAcroField = (field, value = "") => {
   return `${safe.slice(0, Math.max(5, maxChars - 3)).trim()}...`;
 };
 
-const fitTextForPdfBox = (value, width = 40, height = 14) => {
+const fitTextForPdfBox = (value, width = 40, height = 14, font = null, fontSize = null) => {
   const safe = toPdfSafeText(value, KYC_UNCAPTURED_LABEL);
   const boxWidth = Number(width || 40);
   const boxHeight = Number(height || 14);
-  const maxCharsByWidth = Math.max(7, Math.floor(boxWidth / 3.1));
-  const maxLines = Math.min(3, Math.max(1, Math.floor(boxHeight / 5.5)));
+  const size = fontSize || getPdfBoxFontSize(safe, 6);
+  const lineHeight = size + 0.45;
+  const maxLines = Math.max(1, Math.floor(boxHeight / lineHeight));
+  const textWidth = (text) => {
+    try {
+      return font ? font.widthOfTextAtSize(text, size) : String(text || "").length * size * 0.5;
+    } catch {
+      return String(text || "").length * size * 0.5;
+    }
+  };
+  const trimWord = (word) => {
+    let next = String(word || "").trim();
+    while (next && textWidth(next) > boxWidth) {
+      next = next.slice(0, -1).trimEnd();
+    }
+    return next;
+  };
   const words = safe.split(/\s+/).filter(Boolean);
   const lines = [];
   let currentLine = "";
 
   for (const word of words) {
     const nextLine = currentLine ? `${currentLine} ${word}` : word;
-    if (nextLine.length <= maxCharsByWidth) {
+    if (textWidth(nextLine) <= boxWidth) {
       currentLine = nextLine;
       continue;
     }
     if (currentLine) lines.push(currentLine);
-    currentLine = word;
+    currentLine = textWidth(word) <= boxWidth ? word : trimWord(word);
     if (lines.length >= maxLines) break;
   }
 
@@ -4373,33 +4980,100 @@ const drawTinyReasonText = (page, font, text, x, y, width, height) => {
   if (!safe) return;
   const textLength = safe.replace(/\s+/g, " ").trim().length;
   const fontSize =
-    textLength <= 12 ? 6 :
-    textLength <= 22 ? 5 :
-    textLength <= 36 ? 4.2 :
+    textLength <= 12 ? 5.4 :
+    textLength <= 22 ? 4.5 :
+    textLength <= 36 ? 3.8 :
     3.2;
-  const lineHeight = fontSize + 0.45;
+  const lineHeight = fontSize + 0.35;
   const maxLines = Math.max(1, Math.floor(Number(height || 12) / lineHeight));
-  const maxChars = Math.max(6, Math.floor(Number(width || 42) / (fontSize * 0.5)));
+  const boxWidth = Math.max(8, Number(width || 42));
+  const textWidth = (value) => {
+    try {
+      return font.widthOfTextAtSize(value, fontSize);
+    } catch {
+      return String(value || "").length * fontSize * 0.5;
+    }
+  };
+  const trimToWidth = (value, suffix = "") => {
+    let next = String(value || "").trim();
+    while (next && textWidth(`${next}${suffix}`) > boxWidth) {
+      next = next.slice(0, -1).trimEnd();
+    }
+    return next ? `${next}${suffix}` : "";
+  };
   const words = safe.split(/\s+/).filter(Boolean);
   const lines = [];
   let line = "";
+  let consumedWords = 0;
 
   for (const word of words) {
     const next = line ? `${line} ${word}` : word;
-    if (next.length <= maxChars) {
+    if (textWidth(next) <= boxWidth) {
       line = next;
+      consumedWords += 1;
       continue;
     }
-    if (line) lines.push(line);
-    line = word;
+    if (line) {
+      lines.push(line);
+      line = "";
+    }
     if (lines.length >= maxLines) break;
+    line = textWidth(word) <= boxWidth ? word : trimToWidth(word);
+    consumedWords += 1;
   }
   if (line && lines.length < maxLines) lines.push(line);
 
+  const hasHiddenText = consumedWords < words.length;
+  if (hasHiddenText && lines.length) {
+    lines[lines.length - 1] = trimToWidth(lines[lines.length - 1], "...");
+  }
+
   lines.slice(0, maxLines).forEach((lineText, index) => {
+    if (!lineText) return;
     page.drawText(lineText, {
       x,
       y: y + height - fontSize - 1 - index * lineHeight,
+      size: fontSize,
+      font,
+      color: rgb(0.02, 0.03, 0.04),
+    });
+  });
+};
+
+const getReasonDrawBox = (scaled, pageHeight) => {
+  const rawWidth = Number(scaled.reasonWidth || 40);
+  const rawHeight = Number(scaled.reasonHeight || 14);
+  const inset = 3;
+  const x = Math.max(0, Number(scaled.reasonX || 0) + inset);
+  const y =
+    pageHeight -
+    Number(scaled.reasonY || 0) -
+    rawHeight +
+    inset;
+  const width = Math.max(8, rawWidth - inset * 2);
+  const height = Math.max(8, rawHeight - inset * 2);
+
+  return { x, y, width, height };
+};
+
+const drawMappedPdfText = (page, font, value, scaled, pageHeight) => {
+  const text = fitTextForPdfBox(
+    value,
+    scaled.width || 200,
+    scaled.height || 14,
+    font,
+    scaled.fontSize || 9,
+  );
+  if (!text) return;
+  const x = Number(scaled.inputX || 0);
+  const height = Number(scaled.height || 14);
+  const fontSize = scaled.fontSize || 9;
+  const lineHeight = fontSize + 0.45;
+  const topY = pageHeight - Number(scaled.inputY || 0);
+  text.split("\n").forEach((lineText, index) => {
+    page.drawText(toPdfSafeText(lineText, KYC_UNCAPTURED_LABEL), {
+      x,
+      y: topY - fontSize - 1 - index * lineHeight,
       size: fontSize,
       font,
       color: rgb(0.02, 0.03, 0.04),
@@ -4465,6 +5139,15 @@ const drawCheckMarkInRect = (page, rect) => {
   return true;
 };
 
+const PDF_DIRECT_FILL_SKIP_FIELD_IDS = new Set([
+  "height_cm",
+  "weight_kg",
+  "habits_addictions",
+  "existing_insurance_cover",
+  "all_life_cover",
+  "all_ci_cover",
+]);
+
 const fillNamedKycAcroFields = (form, pages, fields, responses) => {
   const fieldsByName = new Map(
     form.getFields().map((field) => [field.getName?.() || "", field]),
@@ -4473,6 +5156,7 @@ const fillNamedKycAcroFields = (form, pages, fields, responses) => {
   let filledCount = 0;
 
   fields.forEach((field) => {
+    if (PDF_DIRECT_FILL_SKIP_FIELD_IDS.has(field.id)) return;
     const answer = String(responses[field.id] ?? "").trim();
     if (!answer) return;
 
@@ -4816,13 +5500,13 @@ const SYSTEM_PROMPT = `
 You are a healthcare quality assurance AI for Carely Health.
 
 Your responsibilities:
-- Analyze nurse–patient call transcripts
+- Analyze nurseâ€“patient call transcripts
 - Compare nurse statements with discharge instructions
 - Identify:
-  • Unsafe medical advice
-  • Statements outside nursing scope
-  • Contradictions to discharge instructions
-  • Dismissive or misleading language
+  â€¢ Unsafe medical advice
+  â€¢ Statements outside nursing scope
+  â€¢ Contradictions to discharge instructions
+  â€¢ Dismissive or misleading language
 - Quote problematic nurse statements
 - Explain why each is an issue
 - Suggest safer, policy-compliant alternatives
@@ -5241,103 +5925,71 @@ const KycImageCapture = ({
     reader.readAsDataURL(file);
   };
 
-  const s = {
-    wrap: {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      width: "100%",
-      height: "100%",
-      padding: 32,
-      background: "#000",
-    },
-    box: {
-      width: "100%",
-      maxWidth: 620,
-      background: "#0d0d14",
-      borderRadius: 20,
-      padding: 30,
-      border: "1px solid rgba(255,255,255,0.08)",
-      color: "#e2e8f0",
-    },
-    title: { margin: "0 0 8px", fontSize: 22, fontWeight: 700, textAlign: "center" },
-    sub: { margin: "0 0 22px", fontSize: 13, color: "#94a3b8", textAlign: "center", lineHeight: 1.5 },
-    stage: {
-      aspectRatio: "4 / 3",
-      width: "100%",
-      background: "#020617",
-      borderRadius: 14,
-      overflow: "hidden",
-      border: "1px solid rgba(255,255,255,0.08)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    video: { width: "100%", height: "100%", objectFit: "cover" },
-    preview: { width: "100%", height: "100%", objectFit: "contain", background: "#020617" },
-    actions: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 18 },
-    primary: {
-      padding: 14,
-      border: "none",
-      borderRadius: 12,
-      background: "linear-gradient(135deg,#34d399,#059669)",
-      color: "#fff",
-      fontSize: 14,
-      fontWeight: 700,
-      cursor: "pointer",
-    },
-    secondary: {
-      padding: 14,
-      border: "1px solid rgba(255,255,255,0.1)",
-      borderRadius: 12,
-      background: "rgba(255,255,255,0.04)",
-      color: "#cbd5e1",
-      fontSize: 14,
-      fontWeight: 600,
-      cursor: "pointer",
-    },
-    status: { margin: "14px 0 0", minHeight: 20, fontSize: 13, color: "#fbbf24", textAlign: "center" },
-  };
-
   return (
-    <div style={s.wrap}>
-      <div style={s.box}>
-        <h2 style={s.title}>{title}</h2>
-        <p style={s.sub}>{subtitle}</p>
-        <div style={s.stage}>
+    <div className="flex h-full w-full items-center justify-center bg-slate-950 p-3 sm:p-6">
+      <div className="relative h-full max-h-[760px] w-full max-w-5xl overflow-hidden rounded-[28px] border border-white/10 bg-slate-900 text-slate-100 shadow-2xl">
+        <div className="absolute left-0 right-0 top-0 z-20 flex flex-col gap-2 bg-gradient-to-b from-black/70 to-transparent px-5 py-5 sm:px-7">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="m-0 text-lg font-bold leading-tight sm:text-2xl">{title}</h2>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-300 sm:text-sm">
+                {subtitle}
+              </p>
+            </div>
+            <div className="hidden rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-200 sm:block">
+              Auto capture
+            </div>
+          </div>
+        </div>
+
+        <div className="relative h-full min-h-[520px] w-full bg-black">
           {preview ? (
-            <img src={preview} alt={title} style={s.preview} />
+            <img src={preview} alt={title} className="h-full w-full object-contain" />
           ) : (
-            <video ref={videoRef} muted playsInline style={s.video} />
+            <video ref={videoRef} muted playsInline className="h-full w-full object-cover" />
           )}
-        </div>
-        <div style={s.actions}>
-          <button style={s.secondary} onClick={() => fileInputRef.current?.click()}>
-            Upload photo
-          </button>
-          <button
-            style={s.primary}
-            onClick={preview ? () => onComplete?.(preview) : captureFromVideo}
-            disabled={isStarting || isAutoCapturing}
-          >
-            {preview
-              ? isAutoCapturing
-                ? "Using captured photo..."
-                : "Use this photo"
-              : isStarting
+
+          {!preview && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div
+                className={
+                  captureType === "id"
+                    ? "h-[42%] w-[82%] rounded-2xl border-2 border-dashed border-white/70 shadow-[0_0_0_999px_rgba(2,6,23,0.28)] sm:w-[58%]"
+                    : "h-[76%] w-[44%] rounded-[999px] border-2 border-dashed border-white/70 shadow-[0_0_0_999px_rgba(2,6,23,0.24)] sm:w-[28%]"
+                }
+              />
+            </div>
+          )}
+
+          <div className="absolute bottom-0 left-0 right-0 z-20 bg-gradient-to-t from-black/80 to-transparent px-5 py-5 sm:px-7">
+            <div className="mx-auto flex max-w-3xl items-center justify-center rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-center text-sm font-semibold text-amber-200 backdrop-blur">
+              {isStarting
                 ? "Starting camera..."
-                : captureLabel}
-          </button>
+                : preview
+                  ? "Clear image captured. Moving to the next step..."
+                  : status || "Hold steady inside the guide. Capture runs automatically."}
+            </div>
+            {status.toLowerCase().includes("camera") && !preview && (
+              <div className="mt-3 flex justify-center gap-3">
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-xs font-bold text-slate-100"
+                  onClick={startCamera}
+                >
+                  Retry camera
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-xs font-bold text-slate-100"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Upload fallback
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-        <div style={s.actions}>
-          <button style={s.secondary} onClick={preview ? () => setPreview("") : startCamera}>
-            {preview ? "Retake" : "Restart camera"}
-          </button>
-          <button style={s.secondary} onClick={() => onSkip?.()}>
-            Skip for now
-          </button>
-        </div>
-        <p style={s.status}>{status}</p>
+
         <input
           ref={fileInputRef}
           type="file"
@@ -5401,6 +6053,7 @@ const CarelyAIAssistant = () => {
   const [kycPdfBytes, setKycPdfBytes] = useState(null);
   const [kycPageDimensions, setKycPageDimensions] = useState([]);
   const kycChatEndRef = useRef(null);
+  const kycLiveTranscriptEndRef = useRef(null);
   const kycPdfBytesRef = useRef(null);
 
   // Care Plan Assessment State
@@ -5430,15 +6083,22 @@ const CarelyAIAssistant = () => {
     useState("");
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isPeopleOpen, setIsPeopleOpen] = useState(false);
+  const [cameraDevices, setCameraDevices] = useState([]);
+  const [selectedCameraDeviceId, setSelectedCameraDeviceId] = useState("");
   const [panCaptureComplete, setPanCaptureComplete] = useState(true);
   const [panOcrData, setPanOcrData] = useState(null);
   const [idCaptureComplete, setIdCaptureComplete] = useState(false);
   const [idDocumentPhoto, setIdDocumentPhoto] = useState("");
   const [fullBodyCaptureComplete, setFullBodyCaptureComplete] = useState(false);
   const [fullBodyPhoto, setFullBodyPhoto] = useState("");
+  const [kycImageCaptureStage, setKycImageCaptureStage] = useState("idle");
   const [autoCaptureStatus, setAutoCaptureStatus] = useState("");
   const [isRecordingCall, setIsRecordingCall] = useState(false);
   const [callRecordingBlob, setCallRecordingBlob] = useState(null);
+  const [callVideoRecordingBlob, setCallVideoRecordingBlob] = useState(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [callTranscription, setCallTranscription] = useState("");
 
@@ -5459,21 +6119,74 @@ const CarelyAIAssistant = () => {
   const ignoredAgentFollowUpRef = useRef(null);
   const transcriptHandlerRefs = useRef({ onUser: null, onAgent: null });
   const processedTranscriptKeysRef = useRef(new Set());
+  const transcriptMessageKeysRef = useRef(new Set());
   const recentTranscriptFingerprintsRef = useRef(new Map());
   const beyondPresenceRoomRef = useRef(null);
+  const callSurfaceRef = useRef(null);
   const userVideoRef = useRef(null);
-  const userCameraStreamRef = useRef(null);
+  const kycImageCaptureStageStartedAtRef = useRef(0);
   const autoCaptureFrameRef = useRef(null);
   const autoCaptureTimerRef = useRef(null);
   const callRecorderRef = useRef(null);
+  const callVideoRecorderRef = useRef(null);
   const callAudioChunksRef = useRef([]);
+  const callVideoChunksRef = useRef([]);
   const callRecordingAudioContextRef = useRef(null);
   const callRecordingSourcesRef = useRef([]);
+  const callRecordingCanvasRef = useRef(null);
+  const callRecordingAnimationRef = useRef(null);
+
+  const getLocalCameraPublication = () => {
+    const room = beyondPresenceRoomRef.current;
+    return room?.localParticipant?.getTrackPublication?.(Track.Source.Camera);
+  };
+
+  const refreshCameraDevices = async () => {
+    try {
+      const devices = await Room.getLocalDevices("videoinput");
+      setCameraDevices(devices);
+      if (!selectedCameraDeviceId && devices[0]?.deviceId) {
+        setSelectedCameraDeviceId(devices[0].deviceId);
+      }
+      return devices;
+    } catch (err) {
+      console.warn("Camera device lookup failed:", err);
+      return [];
+    }
+  };
+
+  const attachLocalCameraPreview = async () => {
+    const publication = getLocalCameraPublication();
+    const videoTrack = publication?.videoTrack || publication?.track;
+    const video = userVideoRef.current;
+    if (!videoTrack || !video) return false;
+
+    try {
+      if (typeof videoTrack.attach === "function") {
+        videoTrack.attach(video);
+      } else if (videoTrack.mediaStreamTrack) {
+        video.srcObject = new MediaStream([videoTrack.mediaStreamTrack]);
+      }
+      video.muted = true;
+      video.playsInline = true;
+      await video.play?.();
+      return true;
+    } catch (err) {
+      console.warn("Local camera preview attach failed:", err);
+      return false;
+    }
+  };
 
   const stopUserCamera = () => {
-    if (userCameraStreamRef.current) {
-      userCameraStreamRef.current.getTracks().forEach((track) => track.stop());
-      userCameraStreamRef.current = null;
+    const room = beyondPresenceRoomRef.current;
+    room?.localParticipant?.setCameraEnabled?.(false).catch((err) => {
+      console.warn("LiveKit camera disable failed:", err);
+    });
+
+    const publication = getLocalCameraPublication();
+    const videoTrack = publication?.videoTrack || publication?.track;
+    if (videoTrack && userVideoRef.current && typeof videoTrack.detach === "function") {
+      videoTrack.detach(userVideoRef.current);
     }
 
     if (userVideoRef.current) {
@@ -5516,23 +6229,68 @@ const CarelyAIAssistant = () => {
     return delta / (data.length / 16);
   };
 
+  const startKycImageCaptureStage = (stage) => {
+    setKycImageCaptureStage(stage);
+    kycImageCaptureStageStartedAtRef.current = Date.now();
+    const instructionEnglish =
+      stage === "id"
+        ? "Please show your PAN or Aadhaar card to the camera. Keep the full card readable and hold it steady until it is captured."
+        : "Please step back from the camera so your full body is visible from head to toe. Stand still until it is captured.";
+    setAutoCaptureStatus(
+      stage === "id"
+        ? "Show the PAN or Aadhaar card to the in-call camera. Capture will happen automatically when it is steady."
+        : "Step back so your full body is visible. Capture will happen automatically when the frame is steady.",
+    );
+    localizeKycText(instructionEnglish, preferredLanguage)
+      .then((instruction) => {
+        if (!instruction) return;
+        setKycChatMessages((prev) => {
+          if (prev.some((msg) => msg.role === "assistant" && msg.content === instruction)) {
+            return prev;
+          }
+          return [...prev, { role: "assistant", content: instruction }];
+        });
+      })
+      .catch(() => {});
+  };
+
+  const markKycCompleteAndStartImageCapture = () => {
+    kycCompleteRef.current = true;
+    setKycComplete(true);
+    if (kycResponsesRef.current?.declaration !== "Yes") {
+      setKycImageCaptureStage("idle");
+      setAutoCaptureStatus("");
+      return;
+    }
+    if (!idDocumentPhoto) {
+      startKycImageCaptureStage("id");
+    } else if (!fullBodyPhoto) {
+      startKycImageCaptureStage("fullBody");
+    } else {
+      setKycImageCaptureStage("done");
+    }
+  };
+
   const tryAutoCaptureCallImages = (reason = "auto") => {
     const video = userVideoRef.current;
-    if (!video || !video.videoWidth) return false;
+    if (!video || !video.videoWidth || kycImageCaptureStage === "idle") return false;
+    if (Date.now() - kycImageCaptureStageStartedAtRef.current < 2500) return false;
     const dataUrl = captureDataUrlFromVideoElement(video);
     if (!dataUrl) return false;
 
-    if (!idDocumentPhoto) {
+    if (kycImageCaptureStage === "id") {
       setIdDocumentPhoto(dataUrl);
       setIdCaptureComplete(true);
-      setAutoCaptureStatus(`ID snapshot captured from call camera (${reason}).`);
+      setAutoCaptureStatus(`ID snapshot captured from BP call camera (${reason}).`);
+      window.setTimeout(() => startKycImageCaptureStage("fullBody"), 900);
       return true;
     }
 
-    if (!fullBodyPhoto) {
+    if (kycImageCaptureStage === "fullBody") {
       setFullBodyPhoto(dataUrl);
       setFullBodyCaptureComplete(true);
-      setAutoCaptureStatus(`Head-to-toe snapshot captured from call camera (${reason}).`);
+      setKycImageCaptureStage("done");
+      setAutoCaptureStatus(`Head-to-toe snapshot captured from BP call camera (${reason}).`);
       return true;
     }
 
@@ -5540,33 +6298,19 @@ const CarelyAIAssistant = () => {
   };
 
   const startUserCamera = async ({ requireConnected = true } = {}) => {
+    const room = beyondPresenceRoomRef.current;
     if (
       !cameraEnabled ||
       (requireConnected && !isAvatarConnected) ||
-      typeof navigator === "undefined" ||
-      !navigator.mediaDevices?.getUserMedia
+      !room?.localParticipant?.setCameraEnabled
     ) {
       return;
     }
 
     try {
-      if (!userCameraStreamRef.current) {
-        userCameraStreamRef.current = await navigator.mediaDevices.getUserMedia(
-          {
-            video: {
-              facingMode: "user",
-              width: { ideal: 720 },
-              height: { ideal: 960 },
-            },
-            audio: false,
-          },
-        );
-      }
-
-      if (userVideoRef.current) {
-        userVideoRef.current.srcObject = userCameraStreamRef.current;
-        await userVideoRef.current.play?.();
-      }
+      await room.localParticipant.setCameraEnabled(true);
+      await refreshCameraDevices();
+      await attachLocalCameraPreview();
     } catch (err) {
       console.error("User camera failed:", err);
       stopUserCamera();
@@ -5588,12 +6332,58 @@ const CarelyAIAssistant = () => {
     }
   };
 
+  const switchToNextCamera = async () => {
+    const room = beyondPresenceRoomRef.current;
+    if (!room?.switchActiveDevice) return;
+
+    const devices = cameraDevices.length
+      ? cameraDevices
+      : await refreshCameraDevices();
+    if (devices.length < 2) return;
+
+    const currentIndex = Math.max(
+      0,
+      devices.findIndex((device) => device.deviceId === selectedCameraDeviceId),
+    );
+    const nextDevice = devices[(currentIndex + 1) % devices.length];
+    if (!nextDevice?.deviceId) return;
+
+    try {
+      await room.switchActiveDevice("videoinput", nextDevice.deviceId);
+      setSelectedCameraDeviceId(nextDevice.deviceId);
+      if (cameraEnabled) {
+        await room.localParticipant.setCameraEnabled(true);
+        window.setTimeout(() => attachLocalCameraPreview(), 250);
+      }
+    } catch (err) {
+      console.error("Camera switch failed:", err);
+    }
+  };
+
   const toggleMute = () => {
     setIsMuted((prev) => !prev);
   };
 
+  const toggleScreenShare = async () => {
+    const room = beyondPresenceRoomRef.current;
+    if (!room?.localParticipant?.setScreenShareEnabled) return;
+
+    try {
+      const nextEnabled = !isScreenSharing;
+      await room.localParticipant.setScreenShareEnabled(nextEnabled);
+      setIsScreenSharing(nextEnabled);
+    } catch (err) {
+      console.error("Screen share toggle failed:", err);
+      setIsScreenSharing(false);
+    }
+  };
+
   useEffect(() => {
-    if (!isAvatarConnected || (idDocumentPhoto && fullBodyPhoto)) {
+    const captureActive =
+      kycComplete &&
+      isAvatarConnected &&
+      (kycImageCaptureStage === "id" || kycImageCaptureStage === "fullBody");
+    if (!captureActive) {
       if (autoCaptureTimerRef.current) {
         window.clearInterval(autoCaptureTimerRef.current);
         autoCaptureTimerRef.current = null;
@@ -5601,7 +6391,7 @@ const CarelyAIAssistant = () => {
       return undefined;
     }
 
-    if (!userCameraStreamRef.current && cameraEnabled) {
+    if (!getLocalCameraPublication() && cameraEnabled) {
       startUserCamera({ requireConnected: false });
     }
 
@@ -5628,7 +6418,7 @@ const CarelyAIAssistant = () => {
         autoCaptureTimerRef.current = null;
       }
     };
-  }, [cameraEnabled, fullBodyPhoto, idDocumentPhoto, isAvatarConnected]);
+  }, [cameraEnabled, isAvatarConnected, kycComplete, kycImageCaptureStage]);
 
   const releaseCallRecordingResources = () => {
     const recorder = callRecorderRef.current;
@@ -5641,6 +6431,21 @@ const CarelyAIAssistant = () => {
       callRecorderRef.current = null;
     }
 
+    const videoRecorder = callVideoRecorderRef.current;
+    if (videoRecorder) {
+      videoRecorder.ondataavailable = null;
+      videoRecorder.onstop = null;
+      if (videoRecorder.state !== "inactive") {
+        videoRecorder.stop();
+      }
+      callVideoRecorderRef.current = null;
+    }
+
+    if (callRecordingAnimationRef.current) {
+      window.cancelAnimationFrame(callRecordingAnimationRef.current);
+      callRecordingAnimationRef.current = null;
+    }
+
     callRecordingSourcesRef.current.forEach((source) => {
       try {
         source.disconnect();
@@ -5650,11 +6455,106 @@ const CarelyAIAssistant = () => {
     });
     callRecordingSourcesRef.current = [];
     callAudioChunksRef.current = [];
+    callVideoChunksRef.current = [];
 
     if (callRecordingAudioContextRef.current) {
       callRecordingAudioContextRef.current.close().catch(() => {});
       callRecordingAudioContextRef.current = null;
     }
+  };
+
+  const drawCallRecordingFrame = () => {
+    const canvas = callRecordingCanvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    const width = canvas.width;
+    const height = canvas.height;
+    const avatarVideo = callSurfaceRef.current?.querySelector?.("[data-avatar-stage] video");
+    const clientVideo = userVideoRef.current;
+
+    ctx.fillStyle = "#6668ad";
+    ctx.fillRect(0, 0, width, height);
+
+    const drawCoverVideo = (video, x, y, boxWidth, boxHeight) => {
+      if (!video?.videoWidth || !video?.videoHeight) return false;
+      const sourceAspect = video.videoWidth / video.videoHeight;
+      const targetAspect = boxWidth / boxHeight;
+      let drawWidth = width;
+      let drawHeight = height;
+      let drawX = x;
+      let drawY = y;
+
+      if (sourceAspect > targetAspect) {
+        drawHeight = boxHeight;
+        drawWidth = boxHeight * sourceAspect;
+        drawX = x + (boxWidth - drawWidth) / 2;
+      } else {
+        drawWidth = boxWidth;
+        drawHeight = boxWidth / sourceAspect;
+        drawY = y + (boxHeight - drawHeight) / 2;
+      }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x, y, boxWidth, boxHeight);
+      ctx.clip();
+      ctx.drawImage(video, drawX, drawY, drawWidth, drawHeight);
+      ctx.restore();
+      return true;
+    };
+
+    if (clientVideo?.videoWidth && cameraEnabled) {
+      drawCoverVideo(clientVideo, 0, 0, width, height);
+    } else {
+      ctx.fillStyle = "#111827";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#bfdbfe";
+      ctx.font = "600 34px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(cameraEnabled ? "Client camera" : "Camera off", width / 2, height / 2);
+    }
+
+    const avatarTileWidth = Math.round(width * 0.28);
+    const avatarTileHeight = Math.round(height * 0.42);
+    const avatarTileX = width - avatarTileWidth - 34;
+    const avatarTileY = 96;
+
+    ctx.fillStyle = "rgba(15,23,42,0.88)";
+    ctx.fillRect(avatarTileX - 5, avatarTileY - 5, avatarTileWidth + 10, avatarTileHeight + 10);
+    ctx.fillStyle = "#020617";
+    ctx.fillRect(avatarTileX, avatarTileY, avatarTileWidth, avatarTileHeight);
+    if (avatarVideo?.videoWidth) {
+      drawCoverVideo(avatarVideo, avatarTileX, avatarTileY, avatarTileWidth, avatarTileHeight);
+    } else {
+      ctx.fillStyle = "#a7f3d0";
+      ctx.font = "600 24px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("Dr. Tara", avatarTileX + avatarTileWidth / 2, avatarTileY + avatarTileHeight / 2);
+    }
+
+    ctx.fillStyle = "rgba(15,23,42,0.78)";
+    ctx.fillRect(0, height - 42, width, 42);
+    ctx.fillRect(avatarTileX, avatarTileY + avatarTileHeight - 34, avatarTileWidth, 34);
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 20px sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Client", 24, height - 15);
+    ctx.font = "700 16px sans-serif";
+    ctx.fillText("Dr. Tara", avatarTileX + 12, avatarTileY + avatarTileHeight - 12);
+
+    if (isRecordingCall) {
+      ctx.fillStyle = "#ef6547";
+      ctx.fillRect(24, 24, 190, 54);
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(50, 51, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.font = "700 24px sans-serif";
+      ctx.textAlign = "left";
+      ctx.fillText("Recording", 70, 59);
+    }
+
+    callRecordingAnimationRef.current = window.requestAnimationFrame(drawCallRecordingFrame);
   };
 
   const startCallRecording = () => {
@@ -5714,7 +6614,9 @@ const CarelyAIAssistant = () => {
       }
 
       callAudioChunksRef.current = [];
+      callVideoChunksRef.current = [];
       setCallRecordingBlob(null);
+      setCallVideoRecordingBlob(null);
       setCallTranscription("");
 
       const preferredMimeType = MediaRecorder.isTypeSupported?.(
@@ -5731,9 +6633,39 @@ const CarelyAIAssistant = () => {
           callAudioChunksRef.current.push(e.data);
         }
       };
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 1280;
+      canvas.height = 720;
+      callRecordingCanvasRef.current = canvas;
+      const canvasStream = canvas.captureStream?.(30);
+      if (!canvasStream) {
+        throw new Error("Video recording is not supported in this browser");
+      }
+      dest.stream.getAudioTracks().forEach((track) => canvasStream.addTrack(track));
+      const preferredVideoMimeType = MediaRecorder.isTypeSupported?.(
+        "video/webm;codecs=vp9,opus",
+      )
+        ? "video/webm;codecs=vp9,opus"
+        : MediaRecorder.isTypeSupported?.("video/webm;codecs=vp8,opus")
+          ? "video/webm;codecs=vp8,opus"
+          : "video/webm";
+      const videoRecorder = new MediaRecorder(
+        canvasStream,
+        preferredVideoMimeType ? { mimeType: preferredVideoMimeType } : undefined,
+      );
+      videoRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          callVideoChunksRef.current.push(e.data);
+        }
+      };
+
       recorder.start(1000);
+      videoRecorder.start(1000);
       callRecorderRef.current = recorder;
+      callVideoRecorderRef.current = videoRecorder;
       setIsRecordingCall(true);
+      drawCallRecordingFrame();
       console.log("[Recording] Started");
     } catch (err) {
       releaseCallRecordingResources();
@@ -5749,6 +6681,7 @@ const CarelyAIAssistant = () => {
       setIsRecordingCall(false);
       if (discard) {
         setCallRecordingBlob(null);
+        setCallVideoRecordingBlob(null);
       }
       releaseCallRecordingResources();
       return;
@@ -5760,10 +6693,24 @@ const CarelyAIAssistant = () => {
       setIsRecordingCall(false);
       if (discard) {
         setCallRecordingBlob(null);
+        setCallVideoRecordingBlob(null);
       }
       releaseCallRecordingResources();
       return;
     }
+
+    const videoRecorder = callVideoRecorderRef.current;
+    let pendingStops = videoRecorder && videoRecorder.state !== "inactive" ? 2 : 1;
+    const finishStop = () => {
+      pendingStops -= 1;
+      if (pendingStops > 0) return;
+      callAudioChunksRef.current = [];
+      callVideoChunksRef.current = [];
+      setIsRecordingCall(false);
+      callRecorderRef.current = null;
+      callVideoRecorderRef.current = null;
+      releaseCallRecordingResources();
+    };
 
     recorder.onstop = () => {
       const blob = new Blob(callAudioChunksRef.current, { type: "audio/webm" });
@@ -5772,12 +6719,24 @@ const CarelyAIAssistant = () => {
       } else if (discard) {
         setCallRecordingBlob(null);
       }
-      callAudioChunksRef.current = [];
-      setIsRecordingCall(false);
-      callRecorderRef.current = null;
-      releaseCallRecordingResources();
       console.log("[Recording] Stopped, blob size:", blob.size);
+      finishStop();
     };
+
+    if (videoRecorder && videoRecorder.state !== "inactive") {
+      videoRecorder.onstop = () => {
+        const videoBlob = new Blob(callVideoChunksRef.current, { type: "video/webm" });
+        if (!discard && videoBlob.size > 0) {
+          setCallVideoRecordingBlob(videoBlob);
+        } else if (discard) {
+          setCallVideoRecordingBlob(null);
+        }
+        console.log("[Recording] Video stopped, blob size:", videoBlob.size);
+        finishStop();
+      };
+      videoRecorder.stop();
+    }
+
     recorder.stop();
   };
 
@@ -5826,6 +6785,32 @@ const CarelyAIAssistant = () => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const downloadBlob = (blob, filename) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadCallAudioRecording = () => {
+    downloadBlob(
+      callRecordingBlob,
+      `call_audio_${new Date().toISOString().split("T")[0]}.webm`,
+    );
+  };
+
+  const downloadCallVideoRecording = () => {
+    downloadBlob(
+      callVideoRecordingBlob,
+      `call_video_${new Date().toISOString().split("T")[0]}.webm`,
+    );
   };
 
   const prefillFromPanOcr = (ocrData) => {
@@ -5881,6 +6866,60 @@ const CarelyAIAssistant = () => {
     return true;
   };
 
+  const recordKycTranscriptMessage = async (role, text, options = {}) => {
+    const cleanText = normalizeTranscriptEncoding(text);
+    if (!cleanText) return false;
+    const key = getTranscriptMessageKey(role, cleanText, options?.eventKey);
+    if (transcriptMessageKeysRef.current.has(key)) return false;
+    transcriptMessageKeysRef.current.add(key);
+
+    const initialDisplayContent = normalizeTranscriptDisplayAnswer(cleanText);
+    if (role === "user") {
+      setKycTranscriptPreview(`"${initialDisplayContent}"`);
+    }
+    setKycChatMessages((prev) => [
+      ...prev,
+      {
+        role,
+        content: cleanText,
+        displayContent: initialDisplayContent,
+        isVoice: true,
+        transcriptKey: key,
+      },
+    ]);
+
+    localizeTranscriptDisplayText(cleanText)
+      .then((displayContent) => {
+        if (!displayContent || displayContent === initialDisplayContent) return;
+        setKycChatMessages((prev) =>
+          prev.map((msg) =>
+            msg.transcriptKey === key ? { ...msg, displayContent } : msg,
+          ),
+        );
+        if (role === "user") {
+          setKycTranscriptPreview(`"${displayContent}"`);
+        }
+      })
+      .catch((err) => {
+        console.warn("Transcript display localization failed:", err);
+      });
+    return true;
+  };
+
+const hideKycTranscriptMessage = (role, text, options = {}) => {
+    if (role === "user") return;
+    const cleanText = normalizeTranscriptEncoding(text);
+    if (!cleanText) return;
+    const key = getTranscriptMessageKey(role, cleanText, options?.eventKey);
+    setKycChatMessages((prev) =>
+      prev.map((msg) =>
+        msg.transcriptKey === key
+          ? { ...msg, isHidden: true, hiddenReason: "rejected_by_kyc_validator" }
+          : msg,
+      ),
+    );
+  };
+
   const initBeyondPresence = async () => {
     if (
       beyondPresenceSession ||
@@ -5907,8 +6946,7 @@ const CarelyAIAssistant = () => {
       );
 
       if (!remainingFields.length) {
-        kycCompleteRef.current = true;
-        setKycComplete(true);
+        markKycCompleteAndStartImageCapture();
         return;
       }
 
@@ -5978,11 +7016,10 @@ const CarelyAIAssistant = () => {
   if (nextIndex < kycFields.length) {
     kycCurrentFieldIndexRef.current = nextIndex;
     setKycCurrentFieldIndex(nextIndex);
-    lastAnswerTimestampRef.current = 0; // ← ADD THIS
+    lastAnswerTimestampRef.current = 0; // â† ADD THIS
     return nextIndex;
   }
-  kycCompleteRef.current = true;
-  setKycComplete(true);
+  markKycCompleteAndStartImageCapture();
   return -1;
 };
 
@@ -5999,6 +7036,13 @@ const CarelyAIAssistant = () => {
       console.log("Ambient user transcript ignored:", cleanText);
       return;
     }
+    const transcriptSource = String(options?.source || "");
+    const isReliableRealtimeTranscriptSource =
+      transcriptSource.startsWith("beyondpresence") ||
+      transcriptSource === "livekit_transcription_fallback";
+    const transcriptWasRecorded = isReliableRealtimeTranscriptSource
+      ? await recordKycTranscriptMessage("user", cleanText, options)
+      : false;
     const now = Date.now();
     if (kycTurnLockRef.current || kycCompleteRef.current) return;
     const activeIndex = kycCurrentFieldIndexRef.current;
@@ -6023,12 +7067,17 @@ const CarelyAIAssistant = () => {
       ignoredAgentFollowUpRef.current &&
       now - ignoredAgentFollowUpRef.current.timestamp < 20000
     ) {
+      const activeFieldForIgnore = kycFields[activeIndex];
+      if (activeFieldForIgnore?.type === "number") {
+        ignoredAgentFollowUpRef.current = null;
+      } else {
       console.log(
         "User transcript ignored for non-form agent follow-up:",
         cleanText,
       );
       ignoredAgentFollowUpRef.current = null;
       return;
+      }
     }
     const recentAskedField =
       lastAgentAskedFieldRef.current &&
@@ -6038,7 +7087,6 @@ const CarelyAIAssistant = () => {
     const safeRecentAskedField =
       recentAskedField &&
       Number.isInteger(recentAskedField.index) &&
-      recentAskedField.index === activeIndex &&
       kycFields[recentAskedField.index] &&
       !isKycFieldComplete(kycFields[recentAskedField.index], currentResponses)
         ? recentAskedField
@@ -6077,7 +7125,12 @@ const CarelyAIAssistant = () => {
       targetFieldIndex,
       answerMode
     );
-    if (!registerProcessedTranscript({ rawKey: eventKey, fingerprint, windowMs: 12000 })) return;
+    if (!registerProcessedTranscript({ rawKey: eventKey, fingerprint, windowMs: 12000 })) {
+      if (isReliableRealtimeTranscriptSource && transcriptWasRecorded) {
+        return;
+      }
+      return;
+    }
 
     const normalizedCleanText = normalize(cleanText);
     const lastCommittedTranscript = lastCommittedTranscriptRef.current;
@@ -6091,12 +7144,9 @@ const CarelyAIAssistant = () => {
     }
 
     console.log('User said:', cleanText);
-    const displayCleanText = await localizeTranscriptDisplayText(cleanText);
-    setKycTranscriptPreview(`"${displayCleanText}"`);
-    setKycChatMessages((prev) => [
-      ...prev,
-      { role: 'user', content: cleanText, displayContent: displayCleanText, isVoice: true },
-    ]);
+    if (!transcriptWasRecorded) {
+      await recordKycTranscriptMessage("user", cleanText, options);
+    }
 
     if (hasFreshClarification) {
       const targetField = kycFields[targetFieldIndex];
@@ -6104,6 +7154,41 @@ const CarelyAIAssistant = () => {
       if (targetField) {
         const confirmation = parseYesNoAnswer(cleanText);
         if (pendingClarification.mode === 'confirm' && confirmation === 'Yes') {
+          const confirmedAnswer = inferConfirmedClarificationAnswer(
+            targetField,
+            pendingClarification.text,
+          );
+          if (hasMeaningfulKycValue(confirmedAnswer)) {
+            let confirmedResponses = {
+              ...currentResponses,
+              [targetField.id]: confirmedAnswer,
+            };
+            if (targetField.id === "gender") {
+              const { responses: genderUpdated } = autoSkipGenderedFields(
+                kycFields,
+                confirmedResponses,
+                confirmedAnswer,
+                targetFieldIndex + 1,
+              );
+              confirmedResponses = genderUpdated;
+            }
+            kycResponsesRef.current = confirmedResponses;
+            setKycResponses(confirmedResponses);
+            lastCommittedFieldRef.current = {
+              index: targetFieldIndex,
+              fieldId: targetField.id,
+              timestamp: now,
+            };
+            lastCommittedTranscriptRef.current = {
+              normalizedText: normalizedCleanText,
+              agentTurn: agentTranscriptTurnRef.current,
+              timestamp: now,
+            };
+            pendingClarificationTargetRef.current = null;
+            lastAnswerTimestampRef.current = now;
+            advanceKycToNextPendingField(confirmedResponses, targetFieldIndex + 1);
+            return;
+          }
           pendingClarificationTargetRef.current = null;
           lastAnswerTimestampRef.current = now;
           return;
@@ -6153,9 +7238,19 @@ const CarelyAIAssistant = () => {
             console.log("Implausible formatted correction ignored:", formattedCorrection, targetField.id);
             return;
           }
+          const inlineCorrectionReason =
+            targetField.requiresReasonOnYes && formattedCorrection === 'Yes'
+              ? extractReasonFromAffirmativeAnswer(correctionText)
+              : '';
           const correctedResponses = {
             ...currentResponses,
             [targetField.id]: formattedCorrection,
+            ...(targetField.reasonResponseId
+              ? {
+                  [targetField.reasonResponseId]:
+                    formattedCorrection === 'Yes' ? inlineCorrectionReason : '',
+                }
+              : {}),
           };
 
           if (targetField.id === 'gender') {
@@ -6210,12 +7305,23 @@ const CarelyAIAssistant = () => {
           const correctionNeedsReason =
             targetField.requiresReasonOnYes &&
             correctedResponses[targetField.id] === 'Yes' &&
-            !hasMeaningfulKycValue(correctedResponses[targetField.reasonResponseId]);
+            (!hasMeaningfulKycValue(correctedResponses[targetField.reasonResponseId]) ||
+              !hasCompleteInlineKycReason(
+                correctedResponses[targetField.reasonResponseId],
+                correctionText,
+              ));
 
           if (correctionNeedsReason) {
+            const nextReasonPhase = hasMeaningfulKycValue(inlineCorrectionReason)
+              ? 'duration'
+              : 'detail';
             pendingReasonFieldRef.current = {
               index: targetFieldIndex,
               fieldId: targetField.id,
+              phase: nextReasonPhase,
+              detail: hasMeaningfulKycValue(inlineCorrectionReason)
+                ? inlineCorrectionReason
+                : '',
               timestamp: Date.now(),
             };
           }
@@ -6259,6 +7365,8 @@ const CarelyAIAssistant = () => {
           !isLikelyNonReasonAnswerForField(currentField.id, cleanText);
         if (!isRelevantReason) {
           console.log("Irrelevant reason answer ignored:", cleanText, currentField.id);
+          hideKycTranscriptMessage("user", cleanText, options);
+          await promptForPendingKycReason(currentField, pendingReason?.phase || "detail");
           return;
         }
 
@@ -6270,13 +7378,43 @@ const CarelyAIAssistant = () => {
         const normalizedReason = extractReasonFromAffirmativeAnswer(
           reasonNormalized.englishText || cleanText,
         );
-        if (!hasMeaningfulKycValue(normalizedReason)) return;
+        const sanitizedReason = sanitizeKycReasonForField(
+          currentField.id,
+          normalizedReason,
+        );
+        if (!hasMeaningfulKycValue(sanitizedReason)) {
+          hideKycTranscriptMessage("user", cleanText, options);
+          await promptForPendingKycReason(currentField, pendingReason?.phase || "detail");
+          return;
+        }
 
         if ((pendingReason?.phase || "detail") === "detail") {
-          if (hasDurationPhrase(normalizedReason) || hasDurationPhrase(cleanText)) {
+          if (currentField.id === "travel_outside_india") {
             const nextResponses = {
               ...currentResponses,
-              [currentField.reasonResponseId]: normalizedReason,
+              [currentField.reasonResponseId]: sanitizedReason,
+            };
+            kycResponsesRef.current = nextResponses;
+            setKycResponses(nextResponses);
+            pendingReasonFieldRef.current = null;
+            lastCommittedFieldRef.current = {
+              index: targetFieldIndex,
+              fieldId: currentField.id,
+              timestamp: Date.now(),
+            };
+            lastCommittedTranscriptRef.current = {
+              normalizedText: normalizedCleanText,
+              agentTurn: agentTranscriptTurnRef.current,
+              timestamp: Date.now(),
+            };
+            lastAnswerTimestampRef.current = Date.now();
+            advanceKycToNextPendingField(nextResponses, targetFieldIndex + 1);
+            return;
+          }
+          if (hasDurationPhrase(sanitizedReason) || hasDurationPhrase(cleanText)) {
+            const nextResponses = {
+              ...currentResponses,
+              [currentField.reasonResponseId]: sanitizedReason,
             };
             kycResponsesRef.current = nextResponses;
             setKycResponses(nextResponses);
@@ -6296,11 +7434,17 @@ const CarelyAIAssistant = () => {
             return;
           }
 
+          const nextResponses = {
+            ...currentResponses,
+            [currentField.reasonResponseId]: sanitizedReason,
+          };
+          kycResponsesRef.current = nextResponses;
+          setKycResponses(nextResponses);
           pendingReasonFieldRef.current = {
             index: targetFieldIndex,
             fieldId: currentField.id,
             phase: "duration",
-            detail: normalizedReason,
+            detail: sanitizedReason,
             timestamp: Date.now(),
           };
           const durationPrompt = await localizeKycText(
@@ -6317,12 +7461,12 @@ const CarelyAIAssistant = () => {
 
         const combinedReason = combineKycReasonParts(
           pendingReason?.detail,
-          normalizedReason,
+          sanitizedReason,
         );
 
         const nextResponses = {
           ...currentResponses,
-          [currentField.reasonResponseId]: combinedReason || normalizedReason,
+          [currentField.reasonResponseId]: combinedReason || sanitizedReason,
         };
         kycResponsesRef.current = nextResponses;
         setKycResponses(nextResponses);
@@ -6347,8 +7491,67 @@ const CarelyAIAssistant = () => {
         currentResponses[currentField.id],
         cleanText,
       );
+      if (currentField.id === "habits_addictions") {
+        const yesNo = parseYesNoAnswer(answerText);
+        if (yesNo === "Yes") {
+          hideKycTranscriptMessage("user", cleanText, options);
+          return;
+        }
+        if (yesNo === "No") {
+          const nextResponses = {
+            ...currentResponses,
+            habits_addictions: "No",
+          };
+          kycResponsesRef.current = nextResponses;
+          setKycResponses(nextResponses);
+          lastAnswerTimestampRef.current = Date.now();
+          advanceKycToNextPendingField(nextResponses, targetFieldIndex + 1);
+          return;
+        }
+
+        const cleanedHabit = cleanHabitAnswerForPdf(answerText);
+        const existingHabit = cleanHabitAnswerForPdf(currentResponses.habits_addictions);
+        if (!cleanedHabit) {
+          console.log("Implausible habits answer ignored:", answerText);
+          hideKycTranscriptMessage("user", cleanText, options);
+          return;
+        }
+
+        const isDurationAppend =
+          hasDurationPhrase(cleanedHabit) &&
+          !hasHabitKeyword(cleanedHabit) &&
+          hasHabitKeyword(existingHabit);
+        const nextHabitValue = isDurationAppend
+          ? combineKycReasonParts(existingHabit, cleanedHabit)
+          : cleanedHabit;
+        const nextResponses = {
+          ...currentResponses,
+          habits_addictions: nextHabitValue,
+        };
+        kycResponsesRef.current = nextResponses;
+        setKycResponses(nextResponses);
+        lastCommittedFieldRef.current = {
+          index: targetFieldIndex,
+          fieldId: currentField.id,
+          timestamp: Date.now(),
+        };
+        lastCommittedTranscriptRef.current = {
+          normalizedText: normalizedCleanText,
+          agentTurn: agentTranscriptTurnRef.current,
+          timestamp: Date.now(),
+        };
+        lastAnswerTimestampRef.current = Date.now();
+
+        if (isIncompleteHabitPhrase(answerText)) {
+          return;
+        }
+
+        advanceKycToNextPendingField(nextResponses, targetFieldIndex + 1);
+        return;
+      }
       if (!isLocallyPlausibleKycAnswerForField(currentField, answerText)) {
         console.log("Implausible answer ignored:", answerText, currentField.id);
+        hideKycTranscriptMessage("user", cleanText, options);
         return;
       }
       const normalized = await normalizeKycAnswerForPdf(answerText, currentField, preferredLanguage);
@@ -6385,6 +7588,7 @@ const CarelyAIAssistant = () => {
         )
       ) {
         console.log("Implausible formatted answer ignored:", formattedAnswer, currentField.id);
+        hideKycTranscriptMessage("user", cleanText, options);
         return;
       }
       const inlineReason =
@@ -6398,7 +7602,7 @@ const CarelyAIAssistant = () => {
         ...(currentField.reasonResponseId
           ? {
               [currentField.reasonResponseId]:
-                formattedAnswer === 'Yes' ? '' : '',
+                formattedAnswer === 'Yes' ? inlineReason : '',
             }
           : {}),
       };
@@ -6454,6 +7658,12 @@ const CarelyAIAssistant = () => {
       }
 
       if (currentField.requiresReasonOnYes && formattedAnswer === 'Yes') {
+        if (hasCompleteInlineKycReason(inlineReason, answerText)) {
+          pendingReasonFieldRef.current = null;
+          advanceKycToNextPendingField(nextResponses, targetFieldIndex + 1);
+          return;
+        }
+
         const nextPhase = hasMeaningfulKycValue(inlineReason) ? "duration" : "detail";
         pendingReasonFieldRef.current = {
           index: targetFieldIndex,
@@ -6500,6 +7710,14 @@ const CarelyAIAssistant = () => {
       (isKycFieldAwaitingReason(activeField, kycResponsesRef.current) ||
         (pendingReasonFieldRef.current?.index === activeIndex &&
           kycResponsesRef.current[activeField.id] === "Yes"));
+    if (
+      !activeFieldAwaitingReason &&
+      isReasonFollowUpText(cleanText) &&
+      /\b(since how long|condition|reason|details?)\b/i.test(cleanText)
+    ) {
+      console.log("Stale reason follow-up ignored:", cleanText);
+      return;
+    }
     let matchedFieldIndex = -1;
 
     if (!kycCompleteRef.current && kycFields.length > 0) {
@@ -6535,21 +7753,11 @@ const CarelyAIAssistant = () => {
       matchedFieldIndex > activeIndex &&
       !isReasonFollowUpText(cleanText)
     ) {
-      const nextResponses = {
-        ...kycResponsesRef.current,
-        [activeField.reasonResponseId]: KYC_UNCAPTURED_VALUE,
-      };
-      kycResponsesRef.current = nextResponses;
-      setKycResponses(nextResponses);
-      pendingReasonFieldRef.current = null;
-      pendingClarificationTargetRef.current = null;
-      kycCurrentFieldIndexRef.current = matchedFieldIndex;
-      setKycCurrentFieldIndex(matchedFieldIndex);
-      lastCommittedFieldRef.current = {
-        index: activeIndex,
-        fieldId: activeField.id,
-        timestamp: now,
-      };
+      console.log(
+        "[KYC] Ignored premature jump to next field while reason is still pending:",
+        cleanText,
+      );
+      return;
     }
     if (
       activeFieldAwaitingReason &&
@@ -6557,14 +7765,11 @@ const CarelyAIAssistant = () => {
       promptedFieldId !== activeField?.id &&
       !isReasonFollowUpText(cleanText)
     ) {
-      const nextResponses = {
-        ...kycResponsesRef.current,
-        [activeField.reasonResponseId]: KYC_UNCAPTURED_VALUE,
-      };
-      kycResponsesRef.current = nextResponses;
-      setKycResponses(nextResponses);
-      pendingReasonFieldRef.current = null;
-      pendingClarificationTargetRef.current = null;
+      console.log(
+        "[KYC] Ignored agent prompt for a different field while reason is still pending:",
+        cleanText,
+      );
+      return;
     }
     console.log('Agent matched field:', matchedFieldIndex, 'current:', kycCurrentFieldIndexRef.current, 'text:', cleanText.slice(0, 50));
 
@@ -6615,6 +7820,7 @@ const CarelyAIAssistant = () => {
         index: clarificationTargetIndex,
         fieldId: clarificationTargetField.id,
         mode: clarificationMode,
+        text: cleanText,
         timestamp: now,
       };
       lastAgentAskedFieldRef.current = {
@@ -6633,35 +7839,31 @@ const CarelyAIAssistant = () => {
     !activeFieldAwaitingReason
   ) {
     const wouldGoBackwards = matchedFieldIndex < kycCurrentFieldIndexRef.current;
-    const earliestPendingIndex = findNextPendingKycFieldIndex(
-      kycFields,
-      kycResponsesRef.current,
-      kycCurrentFieldIndexRef.current,
-    );
-    const wouldSkipPendingField =
-      earliestPendingIndex < matchedFieldIndex &&
-      earliestPendingIndex < kycFields.length;
     const targetAlreadyComplete = isKycFieldComplete(
       kycFields[matchedFieldIndex],
       kycResponsesRef.current
     );
-    if ((!wouldGoBackwards || !targetAlreadyComplete) && !wouldSkipPendingField) {
+    if (!wouldGoBackwards || !targetAlreadyComplete) {
+      if (matchedFieldIndex > kycCurrentFieldIndexRef.current) {
+        const skippedResult = markSkippedFieldsAsUncaptured(
+          kycFields,
+          kycResponsesRef.current,
+          kycCurrentFieldIndexRef.current,
+          matchedFieldIndex,
+        );
+        if (skippedResult.changed) {
+          kycResponsesRef.current = skippedResult.responses;
+          setKycResponses(skippedResult.responses);
+        }
+      }
       kycCurrentFieldIndexRef.current = matchedFieldIndex;
       setKycCurrentFieldIndex(matchedFieldIndex);
     }
   }
 
   if (matchedFieldIndex >= 0) {
-    const earliestPendingIndex = findNextPendingKycFieldIndex(
-      kycFields,
-      kycResponsesRef.current,
-      kycCurrentFieldIndexRef.current,
-    );
     lastAgentAskedFieldRef.current = {
-      index:
-        earliestPendingIndex < matchedFieldIndex && earliestPendingIndex < kycFields.length
-          ? earliestPendingIndex
-          : matchedFieldIndex,
+      index: matchedFieldIndex,
       timestamp: now,
       text: cleanText,
     };
@@ -6670,12 +7872,23 @@ const CarelyAIAssistant = () => {
 
     const displayCleanText = await localizeTranscriptDisplayText(cleanText);
     console.log("Agent said:", cleanText);
-    setKycChatMessages((prev) => [
-      ...prev,
-      { role: "assistant", content: cleanText, displayContent: displayCleanText },
-    ]);
+    await recordKycTranscriptMessage("assistant", cleanText, options);
 
     if (isKycCompletionAnnouncement(cleanText)) {
+      const nextPendingIndex = findNextPendingKycFieldIndex(
+        kycFields,
+        kycResponsesRef.current,
+        0,
+      );
+      if (nextPendingIndex < kycFields.length) {
+        kycCurrentFieldIndexRef.current = nextPendingIndex;
+        setKycCurrentFieldIndex(nextPendingIndex);
+        console.log(
+          "[KYC] Ignored premature completion announcement; pending field:",
+          kycFields[nextPendingIndex]?.id,
+        );
+        return;
+      }
       window.setTimeout(() => {
         finalizeKycSession({
           reason: "completion_announcement",
@@ -6710,129 +7923,6 @@ const CarelyAIAssistant = () => {
   });
 
   useEffect(() => {
-    const agentId = beyondPresenceSession?.agentId;
-    const sessionMode = beyondPresenceSession?.mode;
-    if (!agentId || sessionMode !== "iframe_embed") return undefined;
-
-    let cancelled = false;
-
-    const pollMessages = async () => {
-      try {
-        const res = await fetch(
-          `${API_BASE}/api/beyondpresence/agent-call-messages/${agentId}`,
-        );
-        const data = await res.json();
-        if (cancelled) return;
-         if (kycCompleteRef.current) return;
-        if (!res.ok || data?.error) {
-          console.error(
-            "Beyond Presence message poll failed:",
-            data?.error || res.statusText,
-          );
-          return;
-        }
-
-        const call = data?.call || null;
-        const callId = data?.callId || null;
-        const isCallActive = Boolean(callId) && !call?.ended_at;
-        setIsAvatarConnected(isCallActive);
-
-        if (!isCallActive) {
-          setKycListening(false);
-          setKycSpeaking(false);
-        }
-
-        const messages = extractCallMessages(data)
-          .slice()
-          .sort((a, b) => {
-            const aTime = new Date(
-              a?.sent_at ||
-                a?.created_at ||
-                a?.timestamp ||
-                a?.data?.sent_at ||
-                a?.data?.created_at ||
-                0,
-            ).getTime();
-            const bTime = new Date(
-              b?.sent_at ||
-                b?.created_at ||
-                b?.timestamp ||
-                b?.data?.sent_at ||
-                b?.data?.created_at ||
-                0,
-            ).getTime();
-            return aTime - bTime;
-          });
-const processedKeys = processedTranscriptKeysRef.current;
-
-
-for (const message of messages) {
-  const text = extractTranscriptText(message);
-  if (!text) continue;
-
-  const extractedRole = extractTranscriptRole(message);
-  const sender =
-    extractedRole ||
-    (isLikelyAgentQuestionText(text, getAgentClarificationMode(text))
-      ? "assistant"
-      : "user");
-  const eventKey = String(
-    message?.id ||
-      `${callId || agentId}_${sender}_${message?.sent_at || message?.created_at || message?.timestamp || ""}_${text}`,
-  );
-
-  if (processedKeys.has(eventKey)) continue;
-  processedKeys.add(eventKey);
-
-  if (sender === "assistant") {
-    transcriptHandlerRefs.current.onAgent?.(text, {
-      source: "beyondpresence_poll",
-      eventKey,
-    });
-    continue;
-  }
-
-  transcriptHandlerRefs.current.onUser?.(text, {
-    source: "beyondpresence_poll",
-    eventKey,
-  });
-}
-if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
-  finalizeKycSession({ reason: "iframe_call_ended", announce: true });
-}
-      } catch (err) {
-        if (!cancelled) {
-          console.error("Beyond Presence poll failed:", err);
-        }
-      }
-    };
-
-    pollMessages();
-    const timerId = window.setInterval(pollMessages, 2000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timerId);
-      setIsAvatarConnected(false);
-      setKycListening(false);
-      setKycSpeaking(false);
-    };
-  }, [
-    API_BASE,
-    beyondPresenceSession?.agentId,
-    beyondPresenceSession?.mode,
-  ]);
-
-  useEffect(() => {
-    if (beyondPresenceSession?.mode === "iframe_embed") {
-      if (isAvatarConnected && cameraEnabled) {
-        startUserCamera({ requireConnected: false });
-      } else {
-        stopUserCamera();
-      }
-      return undefined;
-    }
-
     if (isAvatarConnected && cameraEnabled) {
       startUserCamera();
       return undefined;
@@ -6840,7 +7930,7 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
 
     stopUserCamera();
     return undefined;
-  }, [beyondPresenceSession?.mode, cameraEnabled, isAvatarConnected]);
+  }, [cameraEnabled, isAvatarConnected]);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -6859,7 +7949,8 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
   // Auto-scroll KYC chat
   useEffect(() => {
     kycChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [kycChatMessages]);
+    kycLiveTranscriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [kycChatMessages, kycTranscriptPreview]);
 
   useEffect(() => {
     kycCurrentFieldIndexRef.current = kycCurrentFieldIndex;
@@ -6904,31 +7995,25 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
       }
 
       const localized = normalizeTranscriptEncoding(stripInlineYesDetailInstruction(data.text || trimmed));
-      if (languageCode === "hi" && needsHindiTranscriptFallback(localized)) {
-        const fallback = getHindiTranscriptFallback(localized);
-        if (fallback && fallback !== localized) return fallback;
-      }
       return localized;
     } catch (err) {
       console.error("KYC localization fallback:", err);
       if (languageCode === "hi") {
-        return getHindiTranscriptFallback(trimmed);
+        return options.transcriptScript
+          ? getHindiTranscriptFallback(trimmed)
+          : normalizeTranscriptEncoding(trimmed);
       }
       return normalizeTranscriptEncoding(trimmed);
     }
   };
 
   const localizeTranscriptDisplayText = async (text) => {
-    const fastDisplay = getFastTranscriptDisplayText(text, preferredLanguage);
-    if (
-      fastDisplay &&
-      preferredLanguage === "hi" &&
-      (fastDisplay !== normalizeTranscriptDisplayAnswer(text) || !/[A-Za-z]/.test(fastDisplay))
-    ) {
-      return fastDisplay;
-    }
     const trimmed = normalizeTranscriptDisplayAnswer(text);
     if (!trimmed || !preferredLanguage || preferredLanguage === "en") return normalizeTranscriptEncoding(trimmed);
+    if (preferredLanguage === "hi") {
+      return localizeKycText(trimmed, preferredLanguage, { transcriptScript: true });
+    }
+    const fastDisplay = getFastTranscriptDisplayText(text, preferredLanguage);
     const shouldConvertMixedHindi =
       preferredLanguage === "hi" && /[A-Za-z]/.test(trimmed);
     if (
@@ -6943,6 +8028,26 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
       return getHindiTranscriptFallback(localized);
     }
     return localized;
+  };
+
+  const promptForPendingKycReason = async (field, phase = "detail") => {
+    const repromptEnglish =
+      phase === "duration"
+        ? "Please tell me since how long."
+        : "Please tell me the actual condition or reason, not only yes or no.";
+    try {
+      const reprompt = await localizeKycText(repromptEnglish, preferredLanguage);
+      setKycChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: reprompt },
+      ]);
+    } catch (err) {
+      console.error("KYC reason reprompt localization error:", err);
+      setKycChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: repromptEnglish },
+      ]);
+    }
   };
 
   const normalizeKycAnswerForPdf = async (
@@ -7077,20 +8182,12 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
     const nextResponses = { ...responses };
     const transcriptRecoveredResponses = recoverKycResponsesFromTranscript(kycChatMessages);
     const transcriptReliableFieldIds = new Set([
-      "date_of_birth",
-      "nominee_dob",
-      "contact_no",
-      "education_details",
-      "gender",
-      "height_cm",
-      "weight_kg",
-      "habits_addictions",
-      "existing_insurance_cover",
-      "all_life_cover",
-      "all_ci_cover",
-      "declaration",
+      ...PRESET_DEMO_KYC_FIELDS.map((field) => field.reasonResponseId).filter(Boolean),
     ]);
     for (const [fieldId, value] of Object.entries(transcriptRecoveredResponses)) {
+      if (fieldId === "application_no" && !/^\d{3,}$/.test(String(value || "").trim())) {
+        continue;
+      }
       if (fieldId === "weight_kg") {
         const numericWeight = Number(formatNumericForPdf(value));
         if (
@@ -7103,16 +8200,28 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
       }
       const currentField = fields.find((field) => field.id === fieldId);
       const currentValue = nextResponses[fieldId];
+      const recoveredImprovesName =
+        (fieldId === "life_to_be_assured_name" || fieldId === "nominee_name") &&
+        String(value || "").trim().split(/\s+/).length >
+          String(currentValue || "").trim().split(/\s+/).filter(Boolean).length;
       const currentLooksInvalid =
+        (fieldId === "application_no" &&
+          !/^\d{3,}$/.test(String(formatKycAnswerForPdf({ id: "application_no", type: "text" }, currentValue) || "").trim())) ||
         (currentField?.type === "date" &&
           !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(String(currentValue || "").trim())) ||
         (fieldId === "gender" &&
           !["male", "female", "other"].includes(String(currentValue || "").toLowerCase().trim())) ||
-        (fieldId === "height_cm" && Number(formatHeightCmForPdf(currentValue)) < 100) ||
+        (fieldId === "height_cm" &&
+          (
+            !/^\d+(\.\d+)?$/.test(String(formatHeightCmForPdf(currentValue) || "").trim()) ||
+            Number(formatHeightCmForPdf(currentValue)) < 100 ||
+            Number(formatHeightCmForPdf(currentValue)) > 250
+          )) ||
         (fieldId === "weight_kg" &&
           !/^\d+(\.\d+)?$/.test(String(formatNumericForPdf(currentValue) || "").trim()));
       if (
         transcriptReliableFieldIds.has(fieldId) ||
+        recoveredImprovesName ||
         currentLooksInvalid ||
         !hasRecordedKycValue(nextResponses[fieldId]) ||
         isUncapturedLikeKycValue(nextResponses[fieldId])
@@ -7124,7 +8233,7 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
     const needsEnglishPass = (value) =>
       shouldNormalizeAll ||
       /[^\x00-\x7F]/.test(String(value || "")) ||
-      /\\u[0-9a-fA-F]{4}|Ã|Â|â|à/.test(String(value || ""));
+      /\\u[0-9a-fA-F]{4}|Ãƒ|Ã‚|Ã¢|Ã /.test(String(value || ""));
 
     for (const field of fields) {
       if (!hasRecordedKycValue(nextResponses[field.id]) || isUncapturedLikeKycValue(nextResponses[field.id])) {
@@ -7174,6 +8283,14 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
           );
           nextResponses[field.reasonResponseId] = sanitizedReason || "";
         }
+        if (
+          field.requiresReasonOnYes &&
+          nextResponses[field.id] === "Yes" &&
+          !hasMeaningfulKycValue(nextResponses[field.reasonResponseId]) &&
+          !Object.prototype.hasOwnProperty.call(transcriptRecoveredResponses, field.id)
+        ) {
+          nextResponses[field.id] = KYC_UNCAPTURED_VALUE;
+        }
       }
     }
 
@@ -7183,14 +8300,78 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
     ) {
       nextResponses.existing_insurance_cover = "No";
     }
+    if (
+      hasMeaningfulKycValue(nextResponses.existing_insurance_cover) &&
+      isUnsafeKycPdfText(nextResponses.existing_insurance_cover)
+    ) {
+      nextResponses.existing_insurance_cover = KYC_UNCAPTURED_VALUE;
+    }
+    if (
+      hasMeaningfulKycValue(nextResponses.habits_addictions) &&
+      (isUnsafeKycPdfText(nextResponses.habits_addictions) ||
+        (!/^(none|no|nil|nothing|not applicable)$/i.test(
+          String(nextResponses.habits_addictions || "").trim(),
+        ) &&
+          !hasHabitKeyword(nextResponses.habits_addictions)))
+    ) {
+      nextResponses.habits_addictions = KYC_UNCAPTURED_VALUE;
+    } else if (
+      hasMeaningfulKycValue(nextResponses.habits_addictions) &&
+      !isUncapturedLikeKycValue(nextResponses.habits_addictions)
+    ) {
+      const cleanedHabit = cleanHabitAnswerForPdf(nextResponses.habits_addictions);
+      nextResponses.habits_addictions = cleanedHabit || KYC_UNCAPTURED_VALUE;
+    }
+    for (const numericFieldId of ["all_life_cover", "all_ci_cover"]) {
+      const rawNumberText = String(nextResponses[numericFieldId] || "").trim();
+      const normalizedNumberText = normalizeIndicSpeechText(rawNumberText).toLowerCase();
+      const formattedNumber = formatNumericForPdf(nextResponses[numericFieldId]);
+      if (
+        hasMeaningfulKycValue(nextResponses[numericFieldId]) &&
+        !isUncapturedLikeKycValue(nextResponses[numericFieldId]) &&
+        (!/^\d+(\.\d+)?$/.test(String(formattedNumber || "").trim()) ||
+          isYesNoTranscriptText(rawNumberText) ||
+          hasHabitKeyword(rawNumberText) ||
+          /\b(alcohol|smok|tobacco|habit|addiction|years?|months?)\b/i.test(normalizedNumberText))
+      ) {
+        nextResponses[numericFieldId] = KYC_UNCAPTURED_VALUE;
+      }
+    }
+    if (
+      hasMeaningfulKycValue(nextResponses.declaration) &&
+      !isUncapturedLikeKycValue(nextResponses.declaration) &&
+      !parseYesNoAnswer(nextResponses.declaration)
+    ) {
+      nextResponses.declaration = KYC_UNCAPTURED_VALUE;
+    }
     if (!["male", "female", "other"].includes(String(nextResponses.gender || "").toLowerCase().trim())) {
       nextResponses.gender = KYC_UNCAPTURED_VALUE;
+    }
+    const formattedHeight = formatHeightCmForPdf(nextResponses.height_cm);
+    if (
+      hasMeaningfulKycValue(nextResponses.height_cm) &&
+      !isUncapturedLikeKycValue(nextResponses.height_cm) &&
+      (!/^\d+(\.\d+)?$/.test(String(formattedHeight || "").trim()) ||
+        Number(formattedHeight) < 100 ||
+        Number(formattedHeight) > 250)
+    ) {
+      nextResponses.height_cm = KYC_UNCAPTURED_VALUE;
+    }
+    const formattedWeight = formatNumericForPdf(nextResponses.weight_kg);
+    if (
+      hasMeaningfulKycValue(nextResponses.weight_kg) &&
+      !isUncapturedLikeKycValue(nextResponses.weight_kg) &&
+      (!/^\d+(\.\d+)?$/.test(String(formattedWeight || "").trim()) ||
+        Number(formattedWeight) <= 0 ||
+        Number(formattedWeight) >= 300)
+    ) {
+      nextResponses.weight_kg = KYC_UNCAPTURED_VALUE;
     }
     for (const dateFieldId of ["date_of_birth", "nominee_dob"]) {
       if (
         hasMeaningfulKycValue(nextResponses[dateFieldId]) &&
         !isUncapturedLikeKycValue(nextResponses[dateFieldId]) &&
-        !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(String(nextResponses[dateFieldId]).trim())
+        !isReasonableKycDateValue(nextResponses[dateFieldId])
       ) {
         nextResponses[dateFieldId] = KYC_UNCAPTURED_VALUE;
       }
@@ -7210,10 +8391,17 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
     if (
       travelValue &&
       !isUncapturedLikeKycValue(travelValue) &&
-      !parseYesNoAnswer(travelValue)
+      !parseYesNoAnswer(travelValue) &&
+      isLikelyTravelDestinationText(travelValue)
     ) {
       nextResponses.travel_outside_india = "Yes";
       nextResponses.travel_outside_india_reason = travelValue;
+    } else if (
+      nextResponses.travel_outside_india === "Yes" &&
+      !hasMeaningfulKycValue(nextResponses.travel_outside_india_reason)
+    ) {
+      nextResponses.travel_outside_india = KYC_UNCAPTURED_VALUE;
+      nextResponses.travel_outside_india_reason = "";
     }
     if (
       nextResponses.other_disease === "Yes" &&
@@ -7248,7 +8436,7 @@ if (!isCallActive && !kycCompleteRef.current && messages.length > 0) {
       setChatMessages([
         {
           role: "system",
-          content: `📁 Uploaded: ${file.name}`,
+          content: `ðŸ“ Uploaded: ${file.name}`,
           isSystem: true,
         },
       ]);
@@ -7616,7 +8804,7 @@ Base every answer on the discharge summary and listed conditions.
 
       setVoiceMessages((prev) => [
         ...prev,
-        { role: "user", content: "🎤 Voice message sent...", isVoice: true },
+        { role: "user", content: "ðŸŽ¤ Voice message sent...", isVoice: true },
       ]);
 
       await sendAudioToBackend(audioBlob);
@@ -7652,7 +8840,7 @@ Base every answer on the discharge summary and listed conditions.
           {
             role: "assistant",
             content:
-              "🚨 Nurse has been alerted. A human will contact the patient shortly.",
+              "ðŸš¨ Nurse has been alerted. A human will contact the patient shortly.",
             isAlert: true,
           },
         ]);
@@ -7666,7 +8854,7 @@ Base every answer on the discharge summary and listed conditions.
         ...prev.slice(0, -1),
         {
           role: "user",
-          content: `🎤 "${data.transcription || "Voice message"}"`,
+          content: `ðŸŽ¤ "${data.transcription || "Voice message"}"`,
         },
       ]);
 
@@ -8210,7 +9398,7 @@ Respond ONLY with valid JSON in this exact format:
   }, [activeTab]);
 
   // ============================================================
-  // 3. DOWNLOAD COMPLETED KYC — Creates AcroForm fields on PDF
+  // 3. DOWNLOAD COMPLETED KYC â€” Creates AcroForm fields on PDF
   // ============================================================
   const downloadCompletedKyc = async () => {
     console.log(
@@ -8283,6 +9471,7 @@ Respond ONLY with valid JSON in this exact format:
 
       // Fallback-fill only those fields not matched to existing AcroForm inputs.
       for (const mapping of activeMappings) {
+        if (mapping.skipPdf) continue;
          const answer = activeResponses[mapping.fieldId];
         if (!answer && answer !== false) continue;
         const shouldDrawReasonOverAcro =
@@ -8311,6 +9500,11 @@ Respond ONLY with valid JSON in this exact format:
           ) {
             // ---- CREATE TEXT FIELD ----
             if (!pdfAnswer) continue;
+            if (isUncapturedKycValue(answer) || isUncapturedLikeKycValue(answer)) continue;
+            if (Number(scaled.page || 0) >= 2) {
+              drawMappedPdfText(page, helvetica, pdfAnswer, scaled, pageHeight);
+              continue;
+            }
             const fieldName = uniqueFieldName(`field_${scaled.fieldId}`);
             const textField = form.createTextField(fieldName);
 
@@ -8328,7 +9522,6 @@ Respond ONLY with valid JSON in this exact format:
               height: height,
               font: helvetica,
               borderWidth: 0,
-              backgroundColor: rgb(1, 1, 1),
             });
 
             textField.setText(toPdfSafeText(pdfAnswer, KYC_UNCAPTURED_LABEL));
@@ -8339,6 +9532,7 @@ Respond ONLY with valid JSON in this exact format:
           } else if (scaled.type === "yes_no") {
             // ---- CREATE YES/NO CHECKBOXES ----
             if (!pdfAnswer) continue;
+            if (isUncapturedKycValue(answer) || isUncapturedLikeKycValue(answer)) continue;
             const answerLower = String(pdfAnswer).toLowerCase().trim();
             const isYes =
               answerLower === "yes" ||
@@ -8409,29 +9603,15 @@ Respond ONLY with valid JSON in this exact format:
               scaled.reasonX != null &&
               scaled.reasonY != null
             ) {
-              const reasonBoxWidth = (scaled.reasonWidth || 40) + 8;
-              const reasonBoxHeight = Math.max(10, scaled.reasonHeight || 14);
-              const reasonX = Math.max(0, scaled.reasonX - 1);
-              const reasonY =
-                pageHeight -
-                scaled.reasonY -
-                (scaled.reasonHeight || 14) +
-                2;
-              page.drawRectangle({
-                x: reasonX,
-                y: reasonY,
-                width: reasonBoxWidth,
-                height: reasonBoxHeight,
-                color: rgb(1, 1, 1),
-              });
+              const reasonBox = getReasonDrawBox(scaled, pageHeight);
               drawTinyReasonText(
                 page,
                 helvetica,
                 reasonValue,
-                reasonX + 1,
-                reasonY + 1,
-                reasonBoxWidth - 2,
-                reasonBoxHeight - 2,
+                reasonBox.x + 0.5,
+                reasonBox.y + 0.5,
+                reasonBox.width - 1,
+                reasonBox.height - 1,
               );
             }
           } else if (scaled.type === "gender_checkbox") {
@@ -8510,7 +9690,7 @@ Respond ONLY with valid JSON in this exact format:
         },
       );
 
-      // Flatten the form — bakes values into the PDF permanently
+      // Flatten the form â€” bakes values into the PDF permanently
       try {
         form.flatten();
       } catch (flattenError) {
@@ -8660,8 +9840,7 @@ Respond ONLY with valid JSON in this exact format:
     setKycCurrentFieldIndex(
       Math.min(nextIndex, Math.max(kycFields.length - 1, 0)),
     );
-    kycCompleteRef.current = true;
-    setKycComplete(true);
+    markKycCompleteAndStartImageCapture();
 
     if (announce) {
       setKycChatMessages((prev) => {
@@ -8705,6 +9884,9 @@ Respond ONLY with valid JSON in this exact format:
     setAvatarConnectionBlockedMessage("");
     setCameraEnabled(true);
     setIsMuted(false);
+    setIsScreenSharing(false);
+    setIsChatOpen(false);
+    setIsPeopleOpen(false);
     setPanCaptureComplete(true);
     setPanOcrData(null);
     setIdCaptureComplete(false);
@@ -8714,6 +9896,7 @@ Respond ONLY with valid JSON in this exact format:
     setAutoCaptureStatus("");
     setIsRecordingCall(false);
     setCallRecordingBlob(null);
+    setCallVideoRecordingBlob(null);
     setIsTranscribing(false);
     setCallTranscription("");
     // setKycFile(null);
@@ -8734,6 +9917,7 @@ Respond ONLY with valid JSON in this exact format:
     kycCompleteRef.current = false;
     kycTurnLockRef.current = false;
     processedTranscriptKeysRef.current.clear();
+    transcriptMessageKeysRef.current.clear();
     recentTranscriptFingerprintsRef.current.clear();
     setKycChatMessages([]);
     setKycChatInput("");
@@ -8766,11 +9950,12 @@ Respond ONLY with valid JSON in this exact format:
     stopUserCamera();
     setBeyondPresenceSession(null);
     setIsAvatarConnected(false);
+    setIsScreenSharing(false);
+    setIsChatOpen(false);
+    setIsPeopleOpen(false);
     setPanCaptureComplete(true);
     setIdCaptureComplete(true);
     setFullBodyCaptureComplete(true);
-    kycCompleteRef.current = true;
-    setKycComplete(true);
     finalizeKycSession({ reason: "manual_end", announce: true });
   };
 
@@ -8780,8 +9965,6 @@ Respond ONLY with valid JSON in this exact format:
       console.error("Failed to reload preset KYC document:", err);
     });
   };
-
-  const isManagedIframeMode = beyondPresenceSession?.mode === "iframe_embed";
 
   const sendKycChatMessage = async () => {
     if (!kycChatInput.trim() || isKycLoading) return;
@@ -8817,6 +10000,7 @@ Respond ONLY with valid JSON in this exact format:
           !isLikelyFiller(cleanUserMessage, currentField) &&
           !isLikelyNonReasonAnswerForField(currentField.id, cleanUserMessage);
         if (!isRelevantReason) {
+          await promptForPendingKycReason(currentField, pendingReason?.phase || "detail");
           setIsKycLoading(false);
           return;
         }
@@ -8833,13 +10017,21 @@ Respond ONLY with valid JSON in this exact format:
         const normalizedReason = extractReasonFromAffirmativeAnswer(
           reasonNormalized.englishText || cleanUserMessage,
         );
-        if (!hasMeaningfulKycValue(normalizedReason)) return;
+        const sanitizedReason = sanitizeKycReasonForField(
+          currentField.id,
+          normalizedReason,
+        );
+        if (!hasMeaningfulKycValue(sanitizedReason)) {
+          await promptForPendingKycReason(currentField, pendingReason?.phase || "detail");
+          setIsKycLoading(false);
+          return;
+        }
 
         if ((pendingReason?.phase || "detail") === "detail") {
-          if (hasDurationPhrase(normalizedReason) || hasDurationPhrase(cleanUserMessage)) {
+          if (currentField.id === "travel_outside_india") {
             const nextResponses = {
               ...currentResponses,
-              [currentField.reasonResponseId]: normalizedReason,
+              [currentField.reasonResponseId]: sanitizedReason,
             };
             kycResponsesRef.current = nextResponses;
             setKycResponses(nextResponses);
@@ -8875,18 +10067,67 @@ Respond ONLY with valid JSON in this exact format:
                 ]);
               }
             } else {
-              kycCompleteRef.current = true;
-              setKycComplete(true);
+              markKycCompleteAndStartImageCapture();
+            }
+            setIsKycLoading(false);
+            return;
+          }
+          if (hasDurationPhrase(sanitizedReason) || hasDurationPhrase(cleanUserMessage)) {
+            const nextResponses = {
+              ...currentResponses,
+              [currentField.reasonResponseId]: sanitizedReason,
+            };
+            kycResponsesRef.current = nextResponses;
+            setKycResponses(nextResponses);
+            pendingReasonFieldRef.current = null;
+            recentTranscriptFingerprintsRef.current.set(
+              `answer:${normalize(cleanUserMessage).slice(0, 120)}`,
+              Date.now(),
+            );
+            const nextIndex = findNextUnskippedFieldIndex(
+              kycFields,
+              nextResponses,
+              currentIndex + 1,
+            );
+            if (nextIndex < kycFields.length) {
+              kycCurrentFieldIndexRef.current = nextIndex;
+              setKycCurrentFieldIndex(nextIndex);
+              const nextField = kycFields[nextIndex];
+              const assistantTextEnglish = `Thank you. ${buildKycQuestionPrompt(nextField, nextIndex, kycFields.length)}`;
+              try {
+                const assistantText = await localizeKycText(
+                  assistantTextEnglish,
+                  preferredLanguage,
+                );
+                setKycChatMessages((prev) => [
+                  ...prev,
+                  { role: "assistant", content: assistantText },
+                ]);
+              } catch (err) {
+                console.error("KYC typed prompt localization error:", err);
+                setKycChatMessages((prev) => [
+                  ...prev,
+                  { role: "assistant", content: assistantTextEnglish },
+                ]);
+              }
+            } else {
+              markKycCompleteAndStartImageCapture();
             }
             setIsKycLoading(false);
             return;
           }
 
+          const nextResponses = {
+            ...currentResponses,
+            [currentField.reasonResponseId]: sanitizedReason,
+          };
+          kycResponsesRef.current = nextResponses;
+          setKycResponses(nextResponses);
           pendingReasonFieldRef.current = {
             index: currentIndex,
             fieldId: currentField.id,
             phase: "duration",
-            detail: normalizedReason,
+            detail: sanitizedReason,
             timestamp: Date.now(),
           };
           const durationPrompt = await localizeKycText(
@@ -8903,12 +10144,12 @@ Respond ONLY with valid JSON in this exact format:
 
         const combinedReason = combineKycReasonParts(
           pendingReason?.detail,
-          normalizedReason,
+          sanitizedReason,
         );
 
         const nextResponses = {
           ...currentResponses,
-          [currentField.reasonResponseId]: combinedReason || normalizedReason,
+          [currentField.reasonResponseId]: combinedReason || sanitizedReason,
         };
        kycResponsesRef.current = nextResponses;
 setKycResponses(nextResponses);
@@ -8941,8 +10182,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
             ]);
           }
         } else {
-          kycCompleteRef.current = true;
-          setKycComplete(true);
+          markKycCompleteAndStartImageCapture();
           const completionEnglish = `All ${kycFields.length} fields have been completed.\n\nPlease click "Download Filled PDF" in the top right to generate your document.`;
           try {
             const completionText = await localizeKycText(
@@ -9023,7 +10263,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
         ...(currentField.reasonResponseId
           ? {
               [currentField.reasonResponseId]:
-                formattedAnswer === "Yes" ? "" : "",
+                formattedAnswer === "Yes" ? inlineReason : "",
             }
           : {}),
       };
@@ -9046,6 +10286,64 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
         currentField.requiresReasonOnYes &&
         formattedAnswer === "Yes"
       ) {
+        if (hasCompleteInlineKycReason(inlineReason, cleanUserMessage)) {
+          pendingReasonFieldRef.current = null;
+          const nextIndex = findNextUnskippedFieldIndex(
+            kycFields,
+            nextResponses,
+            currentIndex + 1,
+          );
+
+          if (nextIndex < kycFields.length) {
+            kycCurrentFieldIndexRef.current = nextIndex;
+            setKycCurrentFieldIndex(nextIndex);
+            const nextField = kycFields[nextIndex];
+            const assistantTextEnglish = `Got it. ${buildKycQuestionPrompt(nextField, nextIndex, kycFields.length)}`;
+            try {
+              const assistantText = await localizeKycText(
+                assistantTextEnglish,
+                preferredLanguage,
+              );
+              setKycChatMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: assistantText },
+              ]);
+            } catch (err) {
+              console.error("KYC typed prompt localization error:", err);
+              setKycChatMessages((prev) => [
+                ...prev,
+                { role: "assistant", content: assistantTextEnglish },
+              ]);
+            }
+          } else {
+            markKycCompleteAndStartImageCapture();
+            const completionEnglish = `All ${kycFields.length} fields have been completed.\n\nPlease click "Download Filled PDF" in the top right to generate your document.`;
+            try {
+              const completionText = await localizeKycText(
+                completionEnglish,
+                preferredLanguage,
+              );
+              setKycChatMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: completionText,
+                },
+              ]);
+            } catch (err) {
+              console.error("KYC typed completion localization error:", err);
+              setKycChatMessages((prev) => [
+                ...prev,
+                {
+                  role: "assistant",
+                  content: completionEnglish,
+                },
+              ]);
+            }
+          }
+          return;
+        }
+
         const nextPhase = hasMeaningfulKycValue(inlineReason) ? "duration" : "detail";
         pendingReasonFieldRef.current = {
           index: currentIndex,
@@ -9094,8 +10392,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
           ]);
         }
       } else {
-        kycCompleteRef.current = true;
-        setKycComplete(true);
+        markKycCompleteAndStartImageCapture();
         const completionEnglish = `All ${kycFields.length} fields have been completed.\n\nPlease click "Download Filled PDF" in the top right to generate your document.`;
         try {
           const completionText = await localizeKycText(
@@ -9194,6 +10491,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
       }
 
       for (const mapping of activeMappings) {
+        if (mapping.skipPdf) continue;
         const answer = activeResponses[mapping.fieldId];
         if (!answer && answer !== false) continue;
         const shouldDrawReasonOverAcro =
@@ -9221,6 +10519,11 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
             scaled.type === "number"
           ) {
             if (!pdfAnswer) continue;
+            if (isUncapturedKycValue(answer) || isUncapturedLikeKycValue(answer)) continue;
+            if (Number(scaled.page || 0) >= 2) {
+              drawMappedPdfText(page, helvetica, pdfAnswer, scaled, pageHeight);
+              continue;
+            }
             const textField = form.createTextField(scaled.fieldId);
             textField.addToPage(page, {
               x: scaled.inputX || 0,
@@ -9228,14 +10531,14 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
               width: scaled.width || 200,
               height: scaled.height || 14,
               font: helvetica,
-              borderColor: rgb(0.8, 0.8, 0.8),
-              borderWidth: 0.5,
+              borderWidth: 0,
             });
             textField.setText(toPdfSafeText(pdfAnswer, KYC_UNCAPTURED_LABEL));
             textField.setFontSize(scaled.fontSize || 9);
             textField.defaultUpdateAppearances(helvetica);
           } else if (scaled.type === "yes_no") {
             if (!pdfAnswer) continue;
+            if (isUncapturedKycValue(answer) || isUncapturedLikeKycValue(answer)) continue;
             const answerLower = String(pdfAnswer).toLowerCase().trim();
             const isYes =
               answerLower === "yes" ||
@@ -9295,29 +10598,15 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
               scaled.reasonX != null &&
               scaled.reasonY != null
             ) {
-              const reasonBoxWidth = (scaled.reasonWidth || 40) + 8;
-              const reasonBoxHeight = Math.max(10, scaled.reasonHeight || 14);
-              const reasonX = Math.max(0, scaled.reasonX - 1);
-              const reasonY =
-                pageHeight -
-                scaled.reasonY -
-                (scaled.reasonHeight || 14) +
-                2;
-              page.drawRectangle({
-                x: reasonX,
-                y: reasonY,
-                width: reasonBoxWidth,
-                height: reasonBoxHeight,
-                color: rgb(1, 1, 1),
-              });
+              const reasonBox = getReasonDrawBox(scaled, pageHeight);
               drawTinyReasonText(
                 page,
                 helvetica,
                 reasonValue,
-                reasonX + 1,
-                reasonY + 1,
-                reasonBoxWidth - 2,
-                reasonBoxHeight - 2,
+                reasonBox.x + 0.5,
+                reasonBox.y + 0.5,
+                reasonBox.width - 1,
+                reasonBox.height - 1,
               );
             }
           }
@@ -9340,7 +10629,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
         },
       );
 
-      // NO flatten — keep fields editable
+      // NO flatten â€” keep fields editable
       const filledPdfBytes = await pdfDoc.save();
       const blob = new Blob([filledPdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
@@ -9489,7 +10778,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                             setChatMessages([]);
                           }}
                         >
-                          ✕
+                          âœ•
                         </button>
                       </div>
                       <p style={{ ...styles.uploadLabel, marginTop: "16px" }}>
@@ -9538,7 +10827,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                               setDischargeSummary("");
                             }}
                           >
-                            ✕
+                            âœ•
                           </button>
                         </div>
                       )}
@@ -9613,7 +10902,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                             >
                               {!msg.isSystem && (
                                 <div style={styles.messageAvatar}>
-                                  {msg.role === "user" ? "👤" : "🤖"}
+                                  {msg.role === "user" ? "ðŸ‘¤" : "ðŸ¤–"}
                                 </div>
                               )}
                               <div style={styles.messageContent}>
@@ -9630,7 +10919,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           ...styles.assistantMessage,
                         }}
                       >
-                        <div style={styles.messageAvatar}>🤖</div>
+                        <div style={styles.messageAvatar}>ðŸ¤–</div>
                         <div style={styles.typingIndicator}>
                           <span></span>
                           <span></span>
@@ -9759,7 +11048,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           setDischargeChatMessages([]);
                         }}
                       >
-                        ✕
+                        âœ•
                       </button>
                     </div>
                   )}
@@ -9897,7 +11186,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                             >
                               {!msg.isSystem && (
                                 <div style={styles.messageAvatar}>
-                                  {msg.role === "user" ? "👤" : "🤖"}
+                                  {msg.role === "user" ? "ðŸ‘¤" : "ðŸ¤–"}
                                 </div>
                               )}
                               <div style={styles.messageContent}>
@@ -9914,7 +11203,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           ...styles.assistantMessage,
                         }}
                       >
-                        <div style={styles.messageAvatar}>🤖</div>
+                        <div style={styles.messageAvatar}>ðŸ¤–</div>
                         <div style={styles.typingIndicator}>
                           <span></span>
                           <span></span>
@@ -10063,7 +11352,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                                 color: done || cur ? "#fff" : "#64748b",
                               }}
                             >
-                              {done ? "✓" : idx + 1}
+                              {done ? "âœ“" : idx + 1}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <p
@@ -10127,8 +11416,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         Download Transcript
                       </button>
                     )}
-                    {!isManagedIframeMode &&
-                      callRecordingBlob &&
+                    {callRecordingBlob &&
                       !callTranscription && (
                         <button
                           style={{
@@ -10171,7 +11459,29 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           )}
                         </button>
                       )}
-                    {!isManagedIframeMode && callTranscription && (
+                    {callRecordingBlob && (
+                      <button
+                        style={{
+                          ...ft.dlBtn,
+                          background: "linear-gradient(135deg,#14b8a6,#0f766e)",
+                        }}
+                        onClick={downloadCallAudioRecording}
+                      >
+                        Download Audio
+                      </button>
+                    )}
+                    {callVideoRecordingBlob && (
+                      <button
+                        style={{
+                          ...ft.dlBtn,
+                          background: "linear-gradient(135deg,#8b5cf6,#6d28d9)",
+                        }}
+                        onClick={downloadCallVideoRecording}
+                      >
+                        Download Video
+                      </button>
+                    )}
+                    {callTranscription && (
                       <button
                         style={{
                           ...ft.dlBtn,
@@ -10220,63 +11530,63 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                 )}
               </div>
 
-              <div style={ft.call}>
-                <div style={ft.topBar}>
-                  <div style={ft.topL}>
-                    {isAvatarConnected && <div style={ft.live} />}
-                    <span style={ft.docName}>Dr. Tara</span>
-                    <span style={ft.docSub}>Carely Health</span>
+              <div
+                ref={callSurfaceRef}
+                className="relative flex min-h-[620px] flex-1 overflow-hidden rounded-none bg-[#6668ad] text-white lg:min-h-0"
+              >
+                <div className="absolute left-0 right-0 top-0 z-30 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-b from-black/65 to-transparent px-3 py-3 sm:px-5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {isAvatarConnected && (
+                      <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.8)]" />
+                    )}
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-bold sm:text-base">Dr. Tara</div>
+                      <div className="text-[11px] font-semibold text-white/55">Carely Health</div>
+                    </div>
                   </div>
-                  <div style={ft.topR}>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     {getCompletedKycFieldCount(kycFields, kycResponses) >=
                       kycFields.length && (
                       <>
-                        <button style={ft.actionBtn} onClick={downloadCompletedKyc}>
+                        <button className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-white shadow-lg" onClick={downloadCompletedKyc}>
                           Download Filled PDF
                         </button>
                         {kycChatMessages.length > 0 && (
                           <button
-                            style={{
-                              ...ft.actionBtn,
-                              background: "linear-gradient(135deg,#0ea5e9,#0284c7)",
-                            }}
+                            className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-lg"
                             onClick={downloadKycTranscript}
                           >
                             Download Transcript
                           </button>
                         )}
+                        {callRecordingBlob && (
+                          <button
+                            className="rounded-xl bg-teal-500 px-3 py-2 text-xs font-bold text-white shadow-lg"
+                            onClick={downloadCallAudioRecording}
+                          >
+                            Audio
+                          </button>
+                        )}
+                        {callVideoRecordingBlob && (
+                          <button
+                            className="rounded-xl bg-violet-500 px-3 py-2 text-xs font-bold text-white shadow-lg"
+                            onClick={downloadCallVideoRecording}
+                          >
+                            Video
+                          </button>
+                        )}
                         <button
-                          style={{
-                            ...ft.actionBtn,
-                            background: "rgba(255,255,255,0.08)",
-                          }}
+                          className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white backdrop-blur"
                           onClick={restartPresetKycDocument}
                         >
                           New Session
                         </button>
                       </>
                     )}
-                    {!isManagedIframeMode && isRecordingCall && (
-                      <span
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: 11,
-                          color: "#ef4444",
-                          fontWeight: 600,
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: "50%",
-                            background: "#ef4444",
-                            animation: "fadeInOut 1s ease-in-out infinite",
-                          }}
-                        />
-                        REC
+                    {isRecordingCall && (
+                      <span className="flex items-center gap-2 rounded-xl bg-[#ef6547] px-3 py-2 text-xs font-bold text-white shadow-lg">
+                        <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                        Recording
                       </span>
                     )}
                     <select
@@ -10290,12 +11600,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           ? "End or restart the current session to switch language."
                           : "Choose the conversation language before starting the call."
                       }
-                      style={{
-                        ...ft.langSel,
-                        ...(beyondPresenceSession || isConnectingAvatar
-                          ? ft.langSelDisabled
-                          : {}),
-                      }}
+                      className="min-w-28 rounded-xl border border-white/15 bg-white px-3 py-2 text-xs font-bold text-slate-900 shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {KYC_LANGUAGE_OPTIONS.map((option) => (
                         <option
@@ -10310,7 +11615,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                     {isAvatarConnected &&
                       getCompletedKycFieldCount(kycFields, kycResponses) <
                         kycFields.length && (
-                        <span style={ft.badge}>
+                        <span className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white backdrop-blur">
                           Q
                           {Math.min(kycCurrentFieldIndex + 1, kycFields.length)}
                           /{kycFields.length}
@@ -10319,11 +11624,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                     {getCompletedKycFieldCount(kycFields, kycResponses) >=
                       kycFields.length && (
                       <span
-                        style={{
-                          ...ft.badge,
-                          background: "rgba(52,211,153,0.15)",
-                          color: "#34d399",
-                        }}
+                        className="rounded-xl border border-emerald-300/20 bg-emerald-400/15 px-3 py-2 text-xs font-bold text-emerald-200 backdrop-blur"
                       >
                         Complete
                       </span>
@@ -10331,7 +11632,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                   </div>
                 </div>
 
-                <div style={ft.vidArea}>
+                <div className="relative flex h-full min-h-0 w-full items-stretch justify-stretch">
                   {isExtractingFields ? (
                     <div style={ft.mid}>
                       <div
@@ -10379,7 +11680,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         </p>
                       </div>
                     )
-                  ) : !idCaptureComplete ? (
+                  ) : false && !idCaptureComplete ? (
                     <KycImageCapture
                       key="id-document-capture"
                       title="Upload ID card photo"
@@ -10394,7 +11695,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                       }}
                       onSkip={() => setIdCaptureComplete(true)}
                     />
-                  ) : !fullBodyCaptureComplete ? (
+                  ) : false && !fullBodyCaptureComplete ? (
                     <KycImageCapture
                       key="full-body-capture"
                       title="Upload head-to-toe photo"
@@ -10409,6 +11710,68 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                       }}
                       onSkip={() => setFullBodyCaptureComplete(true)}
                     />
+                  ) : beyondPresenceSession &&
+                    (!kycComplete ||
+                      kycImageCaptureStage === "id" ||
+                      kycImageCaptureStage === "fullBody") ? (
+                    <div className="relative h-full w-full bg-slate-950">
+                      <div className="absolute inset-0 overflow-hidden bg-slate-950">
+                        {cameraEnabled ? (
+                          <video ref={userVideoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full flex-col items-center justify-center bg-slate-900 text-slate-400">
+                            <CameraOff size={40} />
+                            <span className="mt-3 text-sm font-bold">Camera off</span>
+                          </div>
+                        )}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-24 pt-10 text-sm font-bold sm:pb-28">
+                          Client
+                        </div>
+                      </div>
+                      <div data-avatar-stage className="absolute right-3 top-20 z-30 h-[34%] min-h-48 w-[34%] min-w-52 max-w-sm overflow-hidden rounded-xl border border-white/20 bg-slate-950 shadow-2xl sm:right-5 sm:top-20 sm:h-[38%] sm:w-[30%]">
+                        <BeyondPresenceStream
+                          livekitUrl={beyondPresenceSession.livekitUrl}
+                          livekitToken={beyondPresenceSession.livekitToken}
+                          avatarParticipantIdentity={
+                            beyondPresenceSession.avatarParticipantIdentity
+                          }
+                          onUserTranscription={handleUserTranscription}
+                          onAgentTranscription={handleAgentTranscription}
+                          onConnected={() => {
+                            setIsAvatarConnected(true);
+                            if (cameraEnabled) {
+                              startUserCamera();
+                            }
+                            window.setTimeout(() => startCallRecording(), 1500);
+                          }}
+                          onDisconnected={() => {
+                            setIsAvatarConnected(false);
+                            stopCallRecording();
+                            stopUserCamera();
+                            setIsScreenSharing(false);
+                          }}
+                          onRoomRef={(room) => {
+                            beyondPresenceRoomRef.current = room;
+                            if (room && cameraEnabled) {
+                              window.setTimeout(
+                                () => startUserCamera({ requireConnected: false }),
+                                250,
+                              );
+                            }
+                          }}
+                          onSpeakingChange={(isSpeaking) => {
+                            setKycSpeaking(isSpeaking);
+                          }}
+                          onListeningChange={(isListening) => {
+                            setKycListening(isListening);
+                          }}
+                          isMuted={isMuted}
+                        />
+                        <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-bold">
+                          Dr. Tara
+                        </div>
+                      </div>
+                    </div>
                   ) : getCompletedKycFieldCount(kycFields, kycResponses) >=
                     kycFields.length ? (
                     <div style={ft.mid}>
@@ -10450,55 +11813,65 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         Download your filled FMR from the top right
                       </p>
                     </div>
-                  ) : isManagedIframeMode ? (
-                    <div style={ft.embedShell}>
-                      <iframe
-                        title="Dr. Tara"
-                        src={beyondPresenceSession.agentUrl}
-                        allow="camera; microphone; autoplay; fullscreen"
-                        allowFullScreen
-                        style={ft.embedFrame}
-                      />
-                      <video
-                        ref={userVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-                      />
-                    </div>
                   ) : beyondPresenceSession ? (
-                    <BeyondPresenceStream
-                      livekitUrl={beyondPresenceSession.livekitUrl}
-                      livekitToken={beyondPresenceSession.livekitToken}
-                      avatarParticipantIdentity={
-                        beyondPresenceSession.avatarParticipantIdentity
-                      }
-                      onUserTranscription={handleUserTranscription}
-                      onAgentTranscription={handleAgentTranscription}
-                      onConnected={() => {
-                        setIsAvatarConnected(true);
-                        if (cameraEnabled) {
-                          startUserCamera();
-                        }
-                        window.setTimeout(() => startCallRecording(), 1500);
-                      }}
-                      onDisconnected={() => {
-                        setIsAvatarConnected(false);
-                        stopCallRecording();
-                        stopUserCamera();
-                      }}
-                      onRoomRef={(room) => {
-                        beyondPresenceRoomRef.current = room;
-                      }}
-                      onSpeakingChange={(isSpeaking) => {
-                        setKycSpeaking(isSpeaking);
-                      }}
-                      onListeningChange={(isListening) => {
-                        setKycListening(isListening);
-                      }}
-                      isMuted={isMuted}
-                    />
+                    <div className="relative h-full w-full bg-slate-950">
+                      <div className="absolute inset-0 overflow-hidden bg-slate-950">
+                        {cameraEnabled ? (
+                          <video ref={userVideoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full flex-col items-center justify-center bg-slate-900 text-slate-400">
+                            <CameraOff size={40} />
+                            <span className="mt-3 text-sm font-bold">Camera off</span>
+                          </div>
+                        )}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-4 pb-24 pt-10 text-sm font-bold sm:pb-28">
+                          Client
+                        </div>
+                      </div>
+                      <div data-avatar-stage className="absolute right-3 top-20 z-30 h-[34%] min-h-48 w-[34%] min-w-52 max-w-sm overflow-hidden rounded-xl border border-white/20 bg-slate-950 shadow-2xl sm:right-5 sm:top-20 sm:h-[38%] sm:w-[30%]">
+                        <BeyondPresenceStream
+                          livekitUrl={beyondPresenceSession.livekitUrl}
+                          livekitToken={beyondPresenceSession.livekitToken}
+                          avatarParticipantIdentity={
+                            beyondPresenceSession.avatarParticipantIdentity
+                          }
+                          onUserTranscription={handleUserTranscription}
+                          onAgentTranscription={handleAgentTranscription}
+                          onConnected={() => {
+                            setIsAvatarConnected(true);
+                            if (cameraEnabled) {
+                              startUserCamera();
+                            }
+                            window.setTimeout(() => startCallRecording(), 1500);
+                          }}
+                          onDisconnected={() => {
+                            setIsAvatarConnected(false);
+                            stopCallRecording();
+                            stopUserCamera();
+                            setIsScreenSharing(false);
+                          }}
+                          onRoomRef={(room) => {
+                            beyondPresenceRoomRef.current = room;
+                            if (room && cameraEnabled) {
+                              window.setTimeout(
+                                () => startUserCamera({ requireConnected: false }),
+                                250,
+                              );
+                            }
+                          }}
+                          onSpeakingChange={(isSpeaking) => {
+                            setKycSpeaking(isSpeaking);
+                          }}
+                          onListeningChange={(isListening) => {
+                            setKycListening(isListening);
+                          }}
+                          isMuted={isMuted}
+                        />
+                        <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-bold">
+                          Dr. Tara
+                        </div>
+                      </div>
+                    </div>
                   ) : (
                     <div style={ft.mid}>
                       <button
@@ -10576,224 +11949,212 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                   )}
                 </div>
 
-                <div style={ft.liveTranscript}>
-                  <div style={ft.transcriptHead}>
-                    <span>Live Transcript</span>
-                    {kycTranscriptPreview && (
-                      <span style={ft.transcriptListening}>
-                        client: {kycTranscriptPreview.replace(/^"|"$/g, "")}
-                      </span>
-                    )}
-                  </div>
-                  <div style={ft.transcriptBody}>
-                    {buildVisibleTranscriptEntries(kycChatMessages, preferredLanguage).length ? (
-                      buildVisibleTranscriptEntries(kycChatMessages, preferredLanguage)
-                        .map((msg, index) => (
-                          <div
-                            key={`${msg.role}-${index}-${String(msg.content || "").slice(0, 24)}`}
-                            style={ft.transcriptLine}
-                          >
-                            <span
-                              style={{
-                                ...ft.transcriptRole,
-                                color:
-                                  msg.role === "user" ? "#38bdf8" : "#34d399",
-                              }}
-                            >
-                              {msg.role === "user" ? "client:" : "Dr.:"}
-                            </span>
-                            <span style={ft.transcriptText}>
-                              {msg.text}
-                            </span>
-                          </div>
-                        ))
-                    ) : (
-                      <div style={ft.transcriptEmpty}>
-                        The live conversation will appear here.
+                {isAvatarConnected &&
+                  (kycImageCaptureStage === "id" ||
+                    kycImageCaptureStage === "fullBody") && (
+                    <div className="absolute left-1/2 top-20 z-40 w-[min(92vw,520px)] -translate-x-1/2 rounded-2xl border border-amber-200/30 bg-slate-950/85 px-4 py-3 text-center text-sm font-semibold text-amber-100 shadow-2xl backdrop-blur">
+                      <div className="text-xs uppercase tracking-wide text-amber-300">
+                        Auto image capture
                       </div>
-                    )}
-                    <div ref={kycChatEndRef} />
-                  </div>
-                </div>
-
-                {isAvatarConnected && !isManagedIframeMode && (
-                  <div
-                    style={{ ...ft.pip, ...(!cameraEnabled ? ft.pipOff : {}) }}
-                  >
-                    {cameraEnabled ? (
-                      <video
-                        ref={userVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        style={ft.pipVid}
-                      />
-                    ) : (
-                      <div style={ft.pipPlaceholder}>
-                        <svg
-                          width="28"
-                          height="28"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="#64748b"
-                          strokeWidth="1.8"
-                        >
-                          <path d="M1 1l22 22" />
-                          <path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34" />
-                          <path d="M14.12 14.12A3 3 0 1 1 9.88 9.88" />
-                        </svg>
-                        <span
-                          style={{
-                            fontSize: 9,
-                            color: "#475569",
-                            marginTop: 4,
-                            fontWeight: 500,
-                          }}
-                        >
-                          Camera off
-                        </span>
+                      <div className="mt-1">
+                        {kycImageCaptureStage === "id"
+                          ? "Show the ID card to the BP call camera and hold steady."
+                          : "Step back for the head-to-toe photo and hold steady."}
                       </div>
-                    )}
-                  </div>
-                )}
-
-                {false &&
-                  kycFields.length > 0 &&
-                  getCompletedKycFieldCount(kycFields, kycResponses) <
-                    kycFields.length &&
-                  isAvatarConnected && (
-                    <div style={ft.qOver}>
-                      <div style={ft.qChip}>
-                        <span style={ft.qNum}>
-                          Q
-                          {Math.min(kycCurrentFieldIndex + 1, kycFields.length)}
-                        </span>
-                        <span style={ft.qTxt}>
-                          {getActiveKycPromptLabel(
-                            kycFields[kycCurrentFieldIndex],
-                            kycResponses,
-                          ) || ""}
-                        </span>
-                      </div>
-                      {kycTranscriptPreview && (
-                        <div style={ft.tChip}>
-                          <span>Mic</span>
-                          <span style={ft.tTxt}>{kycTranscriptPreview}</span>
+                      {autoCaptureStatus && (
+                        <div className="mt-1 text-xs font-medium text-slate-300">
+                          {autoCaptureStatus}
                         </div>
                       )}
                     </div>
                   )}
 
+                {isAvatarConnected && (
+                  <div className="absolute bottom-24 left-3 z-30 flex max-h-44 w-[min(92vw,520px)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/85 text-white shadow-2xl backdrop-blur sm:left-5">
+                    <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 text-xs font-bold text-slate-200">
+                      <span>Live Transcript</span>
+                      {kycTranscriptPreview && (
+                        <span className="max-w-[56%] truncate text-violet-200">
+                          client: {kycTranscriptPreview.replace(/^"|"$/g, "")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-2 overflow-y-auto px-4 py-3 text-xs leading-5">
+                      {buildVisibleTranscriptEntries(kycChatMessages, preferredLanguage).length ? (
+                        buildVisibleTranscriptEntries(kycChatMessages, preferredLanguage)
+                          .slice(-6)
+                          .map((msg, index) => (
+                            <div
+                              key={`live-${msg.role}-${index}-${String(msg.text || "").slice(0, 24)}`}
+                              className="grid grid-cols-[56px_1fr] gap-2 text-slate-200"
+                            >
+                              <span className={msg.role === "user" ? "font-bold text-sky-300" : "font-bold text-emerald-300"}>
+                                {msg.role === "user" ? "client:" : "Dr.:"}
+                              </span>
+                              <span className="min-w-0 break-words">{msg.text}</span>
+                            </div>
+                          ))
+                      ) : (
+                        <div className="text-slate-400">The live conversation will appear here.</div>
+                      )}
+                      <div ref={kycLiveTranscriptEndRef} />
+                    </div>
+                  </div>
+                )}
+
+                {isChatOpen && (
+                  <div className="absolute bottom-24 right-3 top-20 z-40 flex w-[min(92vw,360px)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 shadow-2xl backdrop-blur sm:right-5">
+                    <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm font-bold">
+                      <span>Live Chat</span>
+                      <button className="text-white/60 hover:text-white" onClick={() => setIsChatOpen(false)}>
+                        <MoreHorizontal size={18} />
+                      </button>
+                    </div>
+                    <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 text-sm">
+                      {buildVisibleTranscriptEntries(kycChatMessages, preferredLanguage).length ? (
+                        buildVisibleTranscriptEntries(kycChatMessages, preferredLanguage).map((msg, index) => (
+                          <div key={`${msg.role}-${index}-${String(msg.content || "").slice(0, 24)}`} className="rounded-2xl bg-white/[0.08] p-3">
+                            <div className={msg.role === "user" ? "text-xs font-bold text-sky-300" : "text-xs font-bold text-emerald-300"}>
+                              {msg.role === "user" ? "Client" : "Dr. Tara"}
+                            </div>
+                            <div className="mt-1 text-slate-100">{msg.text}</div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-white/10 p-4 text-center text-sm text-slate-400">
+                          The live conversation will appear here.
+                        </div>
+                      )}
+                      <div ref={kycChatEndRef} />
+                    </div>
+                  </div>
+                )}
+
+                {isPeopleOpen && (
+                  <div className="absolute bottom-24 right-3 top-20 z-40 w-[min(92vw,320px)] overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 shadow-2xl backdrop-blur sm:right-5">
+                    <div className="border-b border-white/10 px-4 py-3 text-sm font-bold">People</div>
+                    <div className="space-y-3 p-4 text-sm">
+                      <div className="flex items-center gap-3 rounded-2xl bg-white/[0.08] p-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/20 font-bold text-emerald-200">DT</div>
+                        <div>
+                          <div className="font-bold">Dr. Tara</div>
+                          <div className="text-xs text-slate-400">Beyond Presence avatar</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 rounded-2xl bg-white/[0.08] p-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-sky-400/20 font-bold text-sky-200">You</div>
+                        <div>
+                          <div className="font-bold">Client</div>
+                          <div className="text-xs text-slate-400">{cameraEnabled ? "Camera on" : "Camera off"}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {false && isAvatarConnected && (
+                  <div className={`absolute bottom-28 right-3 z-30 h-28 w-40 overflow-hidden rounded-sm border border-white/20 bg-slate-900 shadow-2xl sm:bottom-24 sm:right-5 sm:h-36 sm:w-56 ${!cameraEnabled ? "opacity-85" : ""}`}>
+                    {cameraEnabled ? (
+                      <video ref={userVideoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full flex-col items-center justify-center bg-slate-900 text-slate-400">
+                        <CameraOff size={28} />
+                        <span className="mt-2 text-xs font-bold">Camera off</span>
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/55 px-2 py-1 text-xs font-bold">
+                      You
+                    </div>
+                  </div>
+                )}
+
                 {isAvatarConnected &&
-                  getCompletedKycFieldCount(kycFields, kycResponses) <
-                    kycFields.length &&
-                  (isManagedIframeMode ? (
-                    <div style={ft.ctrls}>
-                      <button
-                        style={ft.endBtn}
-                       onClick={endCallOnly}
-                        title="End Session"
-                      >
-                        <svg
-                          width="28"
-                          height="28"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
+                  (getCompletedKycFieldCount(kycFields, kycResponses) <
+                    kycFields.length ||
+                    kycImageCaptureStage === "id" ||
+                    kycImageCaptureStage === "fullBody") && (
+                    <div className="absolute bottom-3 left-1/2 z-40 flex w-[min(96vw,760px)] -translate-x-1/2 items-end justify-center gap-2 rounded-3xl bg-slate-950/50 px-2 py-2 shadow-2xl backdrop-blur sm:bottom-5 sm:gap-3 sm:px-4">
+                      {[
+                        {
+                          label: "Cam",
+                          icon: cameraEnabled ? <Camera size={22} /> : <CameraOff size={22} />,
+                          active: cameraEnabled,
+                          onClick: toggleCamera,
+                          title: cameraEnabled ? "Camera off" : "Camera on",
+                        },
+                        {
+                          label: "Flip",
+                          icon: <SwitchCamera size={22} />,
+                          active: false,
+                          onClick: switchToNextCamera,
+                          title: "Switch camera",
+                          hidden: cameraDevices.length < 2,
+                        },
+                        {
+                          label: "Mic",
+                          icon: isMuted ? <MicOff size={22} /> : <Mic size={22} />,
+                          active: !isMuted,
+                          onClick: toggleMute,
+                          title: isMuted ? "Unmute" : "Mute",
+                        },
+                        {
+                          label: "Share",
+                          icon: isScreenSharing ? <ScreenShareOff size={22} /> : <MonitorUp size={22} />,
+                          active: isScreenSharing,
+                          onClick: toggleScreenShare,
+                          title: isScreenSharing ? "Stop sharing" : "Share screen",
+                        },
+                        {
+                          label: isRecordingCall ? "Stop" : "Record",
+                          icon: <Radio size={22} />,
+                          active: isRecordingCall,
+                          onClick: () =>
+                            isRecordingCall
+                              ? stopCallRecording({ discard: false })
+                              : startCallRecording(),
+                          title: isRecordingCall ? "Stop recording" : "Start recording",
+                        },
+                        {
+                          label: "Chat",
+                          icon: <MessageSquare size={22} />,
+                          active: isChatOpen,
+                          onClick: () => setIsChatOpen((prev) => !prev),
+                          title: "Chat",
+                        },
+                        {
+                          label: "People",
+                          icon: <Users size={22} />,
+                          active: isPeopleOpen,
+                          onClick: () => setIsPeopleOpen((prev) => !prev),
+                          title: "People",
+                        },
+                      ].filter((control) => !control.hidden).map((control) => (
+                        <button
+                          key={control.label}
+                          type="button"
+                          title={control.title}
+                          onClick={control.onClick}
+                          className={`flex h-16 min-w-14 flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 px-2 text-[11px] font-bold shadow-lg transition sm:h-[76px] sm:min-w-[76px] sm:text-xs ${
+                            control.active
+                              ? "bg-emerald-500/80 text-white"
+                              : "bg-slate-950/80 text-slate-200 hover:bg-slate-800"
+                          }`}
                         >
-                          <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71s-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
-                        </svg>
-                      </button>
-                    </div>
-                  ) : (
-                    <div style={ft.ctrls}>
+                          {control.icon}
+                          <span>{control.label}</span>
+                        </button>
+                      ))}
                       <button
-                        style={{ ...ft.cBtn, ...(isMuted ? ft.cBtnOn : {}) }}
-                        onClick={toggleMute}
-                        title={isMuted ? "Unmute" : "Mute"}
-                      >
-                        {isMuted ? (
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <line x1="1" y1="1" x2="23" y2="23" />
-                            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
-                            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.13 1.49-.35 2.17" />
-                            <line x1="12" y1="19" x2="12" y2="23" />
-                            <line x1="8" y1="23" x2="16" y2="23" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                            <line x1="12" y1="19" x2="12" y2="23" />
-                            <line x1="8" y1="23" x2="16" y2="23" />
-                          </svg>
-                        )}
-                      </button>
-
-                      <button
-                        style={ft.endBtn}
+                        type="button"
+                        title="Leave"
                         onClick={endCallOnly}
-                        title="End Call"
+                        className="flex h-16 min-w-14 flex-col items-center justify-center gap-1 rounded-2xl border border-red-300/20 bg-red-600/90 px-2 text-[11px] font-bold text-white shadow-lg transition hover:bg-red-500 sm:h-[76px] sm:min-w-[76px] sm:text-xs"
                       >
-                        <svg
-                          width="28"
-                          height="28"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                        >
-                          <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71s-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
-                        </svg>
-                      </button>
-
-                      <button
-                        style={{
-                          ...ft.cBtn,
-                          ...(!cameraEnabled ? ft.cBtnOn : {}),
-                        }}
-                        onClick={toggleCamera}
-                        title={cameraEnabled ? "Camera off" : "Camera on"}
-                      >
-                        {cameraEnabled ? (
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M23 7l-7 5 7 5V7z" />
-                            <rect x="1" y="5" width="15" height="14" rx="2" />
-                          </svg>
-                        ) : (
-                          <svg
-                            width="20"
-                            height="20"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10" />
-                            <line x1="1" y1="1" x2="23" y2="23" />
-                          </svg>
-                        )}
+                        <DoorOpen size={22} />
+                        <span>Leave</span>
                       </button>
                     </div>
-                  ))}
+                  )}
               </div>
             </div>
           )}
@@ -10871,7 +12232,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           setCarePlan(null);
                         }}
                       >
-                        ✕
+                        âœ•
                       </button>
                     </div>
                   )}
@@ -11117,7 +12478,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                     </div>
                   ) : assessmentComplete ? (
                     <div style={styles.assessmentComplete}>
-                      <div style={styles.completeIcon}>✓</div>
+                      <div style={styles.completeIcon}>âœ“</div>
                       <h3 style={styles.completeTitle}>Assessment Complete!</h3>
                       <p style={styles.completeMessage}>
                         {carePlan.thankYouMessage}
@@ -11484,14 +12845,6 @@ const ft = {
     display: "flex",
     alignItems: "stretch",
     justifyContent: "stretch",
-  },
-  embedShell: { width: "100%", height: "100%", background: "#05070d" },
-  embedFrame: {
-    width: "100%",
-    height: "100%",
-    border: "none",
-    display: "block",
-    background: "#05070d",
   },
   mid: {
     display: "flex",

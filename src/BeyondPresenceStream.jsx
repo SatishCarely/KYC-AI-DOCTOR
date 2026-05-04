@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Room, RoomEvent, Track } from 'livekit-client';
+import { Room, RoomEvent, Track, VideoPresets } from 'livekit-client';
 
 export default function BeyondPresenceStream({
   livekitUrl,
@@ -17,6 +17,8 @@ export default function BeyondPresenceStream({
   const videoRef = useRef(null);
   const roomRef = useRef(null);
   const audioElementsRef = useRef([]);
+  const receivedBeyMessageRef = useRef(false);
+  const lastBeyMessageRoleRef = useRef(null);
   const callbacksRef = useRef({
     onUserTranscription,
     onAgentTranscription,
@@ -55,7 +57,18 @@ export default function BeyondPresenceStream({
     if (!livekitUrl || !livekitToken) return undefined;
 
     let cancelled = false;
-    const room = new Room({ adaptiveStream: false, dynacast: false });
+    const room = new Room({
+      adaptiveStream: true,
+      dynacast: true,
+      publishDefaults: {
+        simulcast: true,
+        videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+        videoCodec: 'vp8',
+      },
+      videoCaptureDefaults: {
+        resolution: VideoPresets.h360.resolution,
+      },
+    });
     roomRef.current = room;
     const normalizedTargetAvatarIdentity = String(avatarParticipantIdentity || '').trim();
     let selectedVideoParticipantIdentity = normalizedTargetAvatarIdentity || null;
@@ -112,20 +125,25 @@ export default function BeyondPresenceStream({
 
       const requestVideoRecovery = (eventName) => {
         if (cancelled || !roomConnected) return;
-        console.warn('[BeyondPresence] Avatar video element needs recovery:', participantIdentity, eventName);
-        attachedVideoTrackSid = null;
-        window.setTimeout(() => refreshAvatarVideo(`video_${eventName}`), 250);
+        window.setTimeout(() => {
+          if (cancelled || !roomConnected || isCurrentVideoElementHealthy()) return;
+          console.warn('[BeyondPresence] Avatar video element needs recovery:', participantIdentity, eventName);
+          attachedVideoTrackSid = null;
+          refreshAvatarVideo(`video_${eventName}`);
+        }, eventName === 'waiting' ? 1800 : 700);
       };
 
       el.addEventListener('stalled', () => requestVideoRecovery('stalled'));
       el.addEventListener('waiting', () => requestVideoRecovery('waiting'));
-      el.addEventListener('suspend', () => requestVideoRecovery('suspend'));
       el.addEventListener('emptied', () => requestVideoRecovery('emptied'));
       el.addEventListener('ended', () => requestVideoRecovery('ended'));
       el.addEventListener('error', () => requestVideoRecovery('error'));
 
       videoRef.current.innerHTML = '';
       videoRef.current.appendChild(el);
+      el.play?.().catch((err) => {
+        console.warn('[BeyondPresence] Avatar video play was blocked or delayed:', err);
+      });
       attachedVideoTrackSid = track.sid || null;
       selectedVideoParticipantIdentity = participantIdentity;
       console.log('[BeyondPresence] Avatar video attached:', participantIdentity, reason);
@@ -136,6 +154,7 @@ export default function BeyondPresenceStream({
       const participants = normalizedTargetAvatarIdentity
         ? [room.remoteParticipants.get(normalizedTargetAvatarIdentity)].filter(Boolean)
         : Array.from(room.remoteParticipants.values()).filter(isAvatarParticipant);
+      const candidates = [];
 
       for (const participant of participants) {
         const publications = Array.from(participant?.trackPublications?.values?.() || []);
@@ -143,12 +162,22 @@ export default function BeyondPresenceStream({
           const publicationKind = publication?.kind ?? publication?.track?.kind;
           if (publicationKind !== Track.Kind.Video) continue;
           if (publication.track) {
-            return { track: publication.track, participant };
+            const label = [
+              publication.trackName,
+              publication.name,
+              publication.source,
+              publication.track?.sid,
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
+            const isWaitingTrack = label.includes('waiting');
+            candidates.push({ track: publication.track, participant, isWaitingTrack });
           }
         }
       }
 
-      return null;
+      return candidates.find((candidate) => !candidate.isWaitingTrack) || candidates[0] || null;
     };
 
     const refreshAvatarVideo = (reason = 'refresh') => {
@@ -157,6 +186,76 @@ export default function BeyondPresenceStream({
       if (!candidate) return false;
       const forceAttach = reason === 'periodic_heal' || String(reason).startsWith('video_');
       return attachVideoTrack(candidate.track, candidate.participant, reason, forceAttach);
+    };
+
+    const getBeyMessageText = (msg) => {
+      const directCandidates = [
+        msg?.text,
+        msg?.message,
+        msg?.transcript,
+        msg?.content,
+        msg?.body,
+        msg?.data?.text,
+        msg?.data?.message,
+        msg?.payload?.text,
+        msg?.payload?.message,
+      ];
+
+      for (const candidate of directCandidates) {
+        const text = typeof candidate === 'string' ? candidate.trim() : '';
+        if (text) return text;
+      }
+
+      const seen = new Set();
+      const visit = (value, key = '') => {
+        if (value == null) return '';
+        if (typeof value === 'string') {
+          const text = value.trim();
+          if (!text) return '';
+          if (/^(undefined|null|user|assistant|agent|avatar|stt_metrics|livekit_avatar_video_generator)$/i.test(text)) return '';
+          if (/^[a-z0-9_-]{14,}$/i.test(text)) return '';
+          if (/^(id|request_id|participant_id|room_id|timestamp|type|event_type|label|source)$/i.test(key)) return '';
+          return text;
+        }
+        if (typeof value !== 'object') return '';
+        if (seen.has(value)) return '';
+        seen.add(value);
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            const text = visit(item, key);
+            if (text) return text;
+          }
+          return '';
+        }
+        for (const [childKey, childValue] of Object.entries(value)) {
+          const text = visit(childValue, childKey);
+          if (text) return text;
+        }
+        return '';
+      };
+
+      return visit(msg);
+    };
+
+    const isLikelyAgentMessage = (text) => {
+      const normalized = String(text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!normalized) return false;
+      return (
+        normalized.includes('?') ||
+        /^(hi|hello|thank|thanks|got it|great|okay|ok|please|could you|can you|what is|what's|now|next)\b/.test(normalized) ||
+        /\b(please|tell me|could you|can you|what is|what's|date of birth|full name|application number|medical check-up|let'?s start)\b/.test(normalized)
+      );
+    };
+
+    const inferBeyMessageRole = (text) => {
+      const normalized = String(text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!normalized) return null;
+      if (isLikelyAgentMessage(normalized)) return 'assistant';
+      if (lastBeyMessageRoleRef.current === 'assistant') return 'user';
+      if (/^(yes|no|male|female|other|none|nil|zero|one|two|three|four|five|six|seven|eight|nine|\d+|high|low)\b/.test(normalized)) {
+        return 'user';
+      }
+      return 'user';
     };
 
     room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -244,15 +343,24 @@ export default function BeyondPresenceStream({
     room.on(RoomEvent.DataReceived, (payload) => {
       if (cancelled) return;
       try {
-        const msg = JSON.parse(new TextDecoder().decode(payload));
+        const decodedPayload = new TextDecoder().decode(payload);
+        let msg;
+        try {
+          msg = JSON.parse(decodedPayload);
+        } catch {
+          msg = { message: decodedPayload };
+        }
         const eventType = msg?.event_type || msg?.type;
+        const messageText = getBeyMessageText(msg);
         console.log('[BeyondPresence] Event:', eventType, msg);
 
         if (eventType === 'user.transcription' || eventType === 'user_transcription') {
-          if (msg.text) {
-            callbacksRef.current.onUserTranscription?.(msg.text, {
+          if (messageText) {
+            receivedBeyMessageRef.current = true;
+            callbacksRef.current.onUserTranscription?.(messageText, {
               source: 'beyondpresence',
-              eventKey: msg.id || `${eventType}_${msg.text}_${msg.timestamp || Date.now()}`,
+              eventKey: msg.id || `${eventType}_${messageText}_${msg.timestamp || Date.now()}`,
+              allowDuringAgentSpeech: true,
             });
             setListening(false);
           }
@@ -263,11 +371,33 @@ export default function BeyondPresenceStream({
           eventType === 'agent_transcription' ||
           eventType === 'avatar.transcription'
         ) {
-          if (msg.text) {
-            callbacksRef.current.onAgentTranscription?.(msg.text, {
+          if (messageText) {
+            receivedBeyMessageRef.current = true;
+            callbacksRef.current.onAgentTranscription?.(messageText, {
               source: 'beyondpresence',
-              eventKey: msg.id || `${eventType}_${msg.text}_${msg.timestamp || Date.now()}`,
+              eventKey: msg.id || `${eventType}_${messageText}_${msg.timestamp || Date.now()}`,
             });
+          }
+        }
+
+        if (!eventType && messageText) {
+          receivedBeyMessageRef.current = true;
+          const eventKey = msg.id || `bey_message_${messageText}_${msg.timestamp || Date.now()}`;
+          const inferredRole = inferBeyMessageRole(messageText);
+          console.log('[BeyondPresence] Routed Bey message:', inferredRole, messageText);
+          lastBeyMessageRoleRef.current = inferredRole;
+          if (inferredRole === 'assistant') {
+            callbacksRef.current.onAgentTranscription?.(messageText, {
+              source: 'beyondpresence_message',
+              eventKey,
+            });
+          } else {
+            callbacksRef.current.onUserTranscription?.(messageText, {
+              source: 'beyondpresence_message',
+              eventKey,
+              allowDuringAgentSpeech: true,
+            });
+            setListening(false);
           }
         }
 
@@ -312,9 +442,15 @@ export default function BeyondPresenceStream({
 
       const isLocalParticipant = participant?.identity === room.localParticipant.identity;
       if (isLocalParticipant) {
+        if (receivedBeyMessageRef.current) {
+          console.log('[BeyondPresence] Local LiveKit transcript used as fallback:', text);
+        }
         callbacksRef.current.onUserTranscription?.(text, {
-          source: 'livekit_transcription',
+          source: receivedBeyMessageRef.current
+            ? 'livekit_transcription_fallback'
+            : 'livekit_transcription',
           eventKey,
+          allowDuringAgentSpeech: true,
         });
         setListening(false);
         return;

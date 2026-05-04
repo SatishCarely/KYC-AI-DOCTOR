@@ -1,4 +1,4 @@
-import 'dotenv/config';
+﻿import 'dotenv/config';
 import express from 'express';
 import multer from 'multer';
 import fs from 'fs';
@@ -99,7 +99,7 @@ const BEY_API_BASE = 'https://api.bey.dev';
 if (!process.env.BEY_API_KEY && process.env.BEYOND_PRESENCE_API_KEY) {
   process.env.BEY_API_KEY = process.env.BEYOND_PRESENCE_API_KEY;
 }
-const BEY_API_KEY = process.env.BEYOND_PRESENCE_API_KEY;
+const BEY_API_KEY = process.env.BEY_API_KEY || process.env.BEYOND_PRESENCE_API_KEY;
 const LIVEKIT_URL = String(process.env.LIVEKIT_URL || '').trim();
 const LIVEKIT_API_KEY = String(process.env.LIVEKIT_API_KEY || '').trim();
 const LIVEKIT_API_SECRET = String(process.env.LIVEKIT_API_SECRET || '').trim();
@@ -140,15 +140,16 @@ function isHindiHinglishLanguage(code) {
 function getKycSpeechStyleInstruction(code) {
   if (isHindiHinglishLanguage(code)) {
     return [
-      'Speak in natural Hindi and write Hindi text in Devanagari script.',
-      'Use simple everyday Hindi, not Sanskritized words.',
-      'Use common Indian wording like "BP", "sugar", "thyroid", "cholesterol", "surgery", "medicine", "yes", and "no".',
-      'Do not add "अगर हाँ", "agar haan", "if yes", or detail instructions to the main yes/no question.',
-      'Example style: "क्या आपको diabetes, thyroid या sugar की problem है?"',
+      'Speak in natural Indian Hinglish, like a doctor in India talking to a patient.',
+      'Use simple Hindi sentence flow mixed with common English medical/form words.',
+      'Use words like "aap", "kya", "hai", "please", "BP", "sugar", "thyroid", "cholesterol", "surgery", "medicine", "yes", and "no".',
+      'Avoid pure formal Hindi and avoid Sanskritized words.',
+      'Do not add "agar haan", "if yes", or detail instructions to the main yes/no question.',
+      'Example style: "Kya aapko diabetes, thyroid ya sugar ki problem hai?"',
     ].join(' ');
   }
 
-  return `Speak only in ${getKycLanguageName(code)} for all patient-facing responses.`;
+  return `Speak only in ${getKycLanguageName(code)} for all patient-facing responses. Do not use Hindi, Hinglish, Devanagari text, or translated yes/no hints when ${getKycLanguageName(code)} is English.`;
 }
 
 function getSarvamLanguageCode(code) {
@@ -160,10 +161,44 @@ function getSarvamLanguageCode(code) {
 
 function getBeyondPresenceLanguageCode(code) {
   const normalized = String(code || 'en').trim();
+  if (isHindiHinglishLanguage(normalized)) return 'en';
   if (BEY_SUPPORTED_LANGUAGE_CODES.has(normalized)) {
     return normalized;
   }
   return BEY_LANGUAGE_FALLBACKS[normalized] || 'en';
+}
+
+function containsDevanagariText(value) {
+  return /[\u0900-\u097F]/.test(String(value || ''));
+}
+
+async function rewriteAsRomanHinglish(text, languageCode = 'hi') {
+  const trimmed = normalizeTranscriptEncoding(text);
+  if (!trimmed) return '';
+
+  const romanized = await trackOpenAICall(`KYC romanize ${languageCode}`, () =>
+    openai.chat.completions.create({
+      model: OPENAI_CHAT_MODEL,
+      ...withSupportedTemperature(OPENAI_CHAT_MODEL, 0.2),
+      messages: [
+        {
+          role: 'system',
+          content: `Rewrite the text into natural Indian Hinglish in Roman script only.
+
+Rules:
+- Return only the rewritten patient-facing line.
+- Sound like a doctor in India speaking casually and clearly to a patient.
+- Use simple Roman-script Hinglish, not textbook Hindi.
+- Use only ASCII/Roman letters. Do not use Devanagari.
+- Preserve names, numbers, dates, acronyms, and medical terms accurately.
+- Do not add explanations or extra details.`,
+        },
+        { role: 'user', content: trimmed },
+      ],
+    })
+  );
+
+  return romanized.choices[0]?.message?.content?.trim() || trimmed;
 }
 
 function getLocalIP() {
@@ -345,7 +380,7 @@ function getMojibakeByte(char) {
 }
 
 function hasMojibakeMarker(value) {
-  return /[ÃÂâà]/.test(String(value || ''));
+  return /[ÃƒÃ‚Ã¢Ã ]/.test(String(value || ''));
 }
 
 function repairMojibakeSegment(value) {
@@ -386,7 +421,7 @@ function stripInlineYesDetailInstruction(text) {
     .replace(/\s*agar\s+h(?:aa|a)n[, ]+[^.?!]*(?:[.?!]|$)/gi, ' ')
     .replace(/\s*agar\s+yes[, ]+[^.?!]*(?:[.?!]|$)/gi, ' ')
     .replace(/\s*(?:yes|no)\s+(?:boliye|bataiye|bataye)\.?\s*/gi, ' ')
-    .replace(/\s*(?:अगर|यदि)\s+(?:हाँ|हां|हा)[, ]*[^।.?!]*(?:[।.?!]|$)/gi, ' ')
+    .replace(/\s*(?:à¤…à¤—à¤°|à¤¯à¤¦à¤¿)\s+(?:à¤¹à¤¾à¤|à¤¹à¤¾à¤‚|à¤¹à¤¾)[, ]*[^à¥¤.?!]*(?:[à¥¤.?!]|$)/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -394,13 +429,13 @@ function stripInlineYesDetailInstruction(text) {
 function parseCanonicalYesNo(text) {
   const normalized = normalizeTranscriptEncoding(text)
     .toLowerCase()
-    .replace(/[,\s।.!?;:]+$/g, '')
+    .replace(/[,\sà¥¤.!?;:]+$/g, '')
     .replace(/\s+/g, ' ')
     .trim();
   if (!normalized) return null;
 
-  if (['haan ji', 'ha ji', 'हां', 'हाँ', 'हा', 'हो', 'si', 'sí', 'oui'].includes(normalized)) return 'Yes';
-  if (['नहीं', 'नही', 'नाही', 'non'].includes(normalized)) return 'No';
+  if (['haan ji', 'ha ji', 'à¤¹à¤¾à¤‚', 'à¤¹à¤¾à¤', 'à¤¹à¤¾', 'à¤¹à¥‹', 'si', 'sÃ­', 'oui'].includes(normalized)) return 'Yes';
+  if (['à¤¨à¤¹à¥€à¤‚', 'à¤¨à¤¹à¥€', 'à¤¨à¤¾à¤¹à¥€', 'non'].includes(normalized)) return 'No';
 
   const indicNormalized = normalizeIndicSpeechText(normalized)
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -409,8 +444,8 @@ function parseCanonicalYesNo(text) {
   if (['yes', 'haan ji', 'ha ji', 'haan', 'ha', 'han', 'ho'].includes(indicNormalized)) return 'Yes';
   if (['no', 'nahi', 'naahi'].includes(indicNormalized)) return 'No';
 
-  const yesValues = new Set(['yes', 'y', 'yeah', 'yep', 'true', 'haan', 'ha', 'han', 'ho', 'hoy', 'hoi', 'हाँ', 'हां', 'हो', 'होय']);
-  const noValues = new Set(['no', 'n', 'nope', 'nah', 'false', 'nahi', 'naahi', 'नहीं', 'नही', 'नाही']);
+  const yesValues = new Set(['yes', 'y', 'yeah', 'yep', 'true', 'haan', 'ha', 'han', 'ho', 'hoy', 'hoi', 'à¤¹à¤¾à¤', 'à¤¹à¤¾à¤‚', 'à¤¹à¥‹', 'à¤¹à¥‹à¤¯']);
+  const noValues = new Set(['no', 'n', 'nope', 'nah', 'false', 'nahi', 'naahi', 'à¤¨à¤¹à¥€à¤‚', 'à¤¨à¤¹à¥€', 'à¤¨à¤¾à¤¹à¥€']);
 
   if (yesValues.has(normalized) || /^(yes|haan|ha|ho|hoy|hoi)\b/.test(normalized)) return 'Yes';
   if (noValues.has(normalized) || /^(no|nahi|naahi)\b/.test(normalized)) return 'No';
@@ -446,22 +481,22 @@ function normalizeIndicSpeechText(value) {
     .replace(/\u0928\u094c|\u0928\u0909/gi, ' nine ')
     .replace(/\u0926\u0938|\u0926\u0939\u093e/gi, ' ten ')
     .replace(/\u0939\u091c\u093c\u093e\u0930|\u0939\u091c\u093e\u0930/gi, ' thousand ')
-    .replace(/ऑक्टोबर|अक्टूबर|ऑक्टूबर/gi, ' october ')
-    .replace(/सप्टेंबर|सितंबर|सितम्बर/gi, ' september ')
-    .replace(/नवंबर|नोव्हेंबर/gi, ' november ')
-    .replace(/डिसेंबर|दिसंबर/gi, ' december ')
-    .replace(/शून्य|सुन्य|सु्न्य/gi, ' zero ')
-    .replace(/एक/gi, ' one ')
-    .replace(/दोन|दो/gi, ' two ')
-    .replace(/तीन/gi, ' three ')
-    .replace(/चार/gi, ' four ')
-    .replace(/पाच/gi, ' five ')
-    .replace(/सहा|छह/gi, ' six ')
-    .replace(/सात/gi, ' seven ')
-    .replace(/आठ/gi, ' eight ')
-    .replace(/नऊ|नौ/gi, ' nine ')
-    .replace(/दहा|दस/gi, ' ten ')
-    .replace(/हजार/gi, ' thousand ')
+    .replace(/à¤‘à¤•à¥à¤Ÿà¥‹à¤¬à¤°|à¤…à¤•à¥à¤Ÿà¥‚à¤¬à¤°|à¤‘à¤•à¥à¤Ÿà¥‚à¤¬à¤°/gi, ' october ')
+    .replace(/à¤¸à¤ªà¥à¤Ÿà¥‡à¤‚à¤¬à¤°|à¤¸à¤¿à¤¤à¤‚à¤¬à¤°|à¤¸à¤¿à¤¤à¤®à¥à¤¬à¤°/gi, ' september ')
+    .replace(/à¤¨à¤µà¤‚à¤¬à¤°|à¤¨à¥‹à¤µà¥à¤¹à¥‡à¤‚à¤¬à¤°/gi, ' november ')
+    .replace(/à¤¡à¤¿à¤¸à¥‡à¤‚à¤¬à¤°|à¤¦à¤¿à¤¸à¤‚à¤¬à¤°/gi, ' december ')
+    .replace(/à¤¶à¥‚à¤¨à¥à¤¯|à¤¸à¥à¤¨à¥à¤¯|à¤¸à¥à¥à¤¨à¥à¤¯/gi, ' zero ')
+    .replace(/à¤à¤•/gi, ' one ')
+    .replace(/à¤¦à¥‹à¤¨|à¤¦à¥‹/gi, ' two ')
+    .replace(/à¤¤à¥€à¤¨/gi, ' three ')
+    .replace(/à¤šà¤¾à¤°/gi, ' four ')
+    .replace(/à¤ªà¤¾à¤š/gi, ' five ')
+    .replace(/à¤¸à¤¹à¤¾|à¤›à¤¹/gi, ' six ')
+    .replace(/à¤¸à¤¾à¤¤/gi, ' seven ')
+    .replace(/à¤†à¤ /gi, ' eight ')
+    .replace(/à¤¨à¤Š|à¤¨à¥Œ/gi, ' nine ')
+    .replace(/à¤¦à¤¹à¤¾|à¤¦à¤¸/gi, ' ten ')
+    .replace(/à¤¹à¤œà¤¾à¤°/gi, ' thousand ')
     .replace(/\bdhohazardha\b/gi, ' two thousand ten ')
     .replace(/\bdhohazdha\b/gi, ' two thousand ten ')
     .replace(/\bdhoh?az(?:a|aa)r?a?\b/gi, ' two thousand ')
@@ -494,15 +529,15 @@ function normalizeIndicSpeechText(value) {
     .replace(/\bnav\b/gi, ' nine ')
     .replace(/\bdaha\b/gi, ' ten ')
     .replace(/\bdas\b/gi, ' ten ')
-    .replace(/एकशे|एक शे/gi, ' one hundred ')
-    .replace(/दोनशे|दोशे|दोन शे|दो शे/gi, ' two hundred ')
-    .replace(/तीनशे|तीन शे/gi, ' three hundred ')
-    .replace(/चारशे|चार शे/gi, ' four hundred ')
-    .replace(/पाचशे|पाच शे/gi, ' five hundred ')
-    .replace(/सहाशे|सहा शे|छह सौ/gi, ' six hundred ')
-    .replace(/सातशे|सात शे/gi, ' seven hundred ')
-    .replace(/आठशे|आठ शे/gi, ' eight hundred ')
-    .replace(/नऊशे|नौ सौ|नऊ शे/gi, ' nine hundred ')
+    .replace(/à¤à¤•à¤¶à¥‡|à¤à¤• à¤¶à¥‡/gi, ' one hundred ')
+    .replace(/à¤¦à¥‹à¤¨à¤¶à¥‡|à¤¦à¥‹à¤¶à¥‡|à¤¦à¥‹à¤¨ à¤¶à¥‡|à¤¦à¥‹ à¤¶à¥‡/gi, ' two hundred ')
+    .replace(/à¤¤à¥€à¤¨à¤¶à¥‡|à¤¤à¥€à¤¨ à¤¶à¥‡/gi, ' three hundred ')
+    .replace(/à¤šà¤¾à¤°à¤¶à¥‡|à¤šà¤¾à¤° à¤¶à¥‡/gi, ' four hundred ')
+    .replace(/à¤ªà¤¾à¤šà¤¶à¥‡|à¤ªà¤¾à¤š à¤¶à¥‡/gi, ' five hundred ')
+    .replace(/à¤¸à¤¹à¤¾à¤¶à¥‡|à¤¸à¤¹à¤¾ à¤¶à¥‡|à¤›à¤¹ à¤¸à¥Œ/gi, ' six hundred ')
+    .replace(/à¤¸à¤¾à¤¤à¤¶à¥‡|à¤¸à¤¾à¤¤ à¤¶à¥‡/gi, ' seven hundred ')
+    .replace(/à¤†à¤ à¤¶à¥‡|à¤†à¤  à¤¶à¥‡/gi, ' eight hundred ')
+    .replace(/à¤¨à¤Šà¤¶à¥‡|à¤¨à¥Œ à¤¸à¥Œ|à¤¨à¤Š à¤¶à¥‡/gi, ' nine hundred ')
     .replace(/\bek\s+shay\b/gi, ' one hundred ')
     .replace(/\bek\s+she\b/gi, ' one hundred ')
     .replace(/\bdon\s+shay\b/gi, ' two hundred ')
@@ -532,7 +567,7 @@ function normalizeIndicSpeechText(value) {
     .replace(/\bekonaainshi\b/gi, ' seventy nine ')
     .replace(/\bekon\saishi\b/gi, ' seventy nine ')
     .replace(/\bekon\saenshi\b/gi, ' seventy nine ')
-    .replace(/एकोणऐंशी|एकोणऐशी/gi, ' seventy nine ')
+    .replace(/à¤à¤•à¥‹à¤£à¤à¤‚à¤¶à¥€|à¤à¤•à¥‹à¤£à¤à¤¶à¥€/gi, ' seventy nine ')
     .replace(/\bhajar\b/gi, ' thousand ')
     .replace(/\bhazaar\b/gi, ' thousand ')
     .replace(/\bhazar\b/gi, ' thousand ')
@@ -657,12 +692,12 @@ async function localizeKycText(text, languageCode, options = {}) {
   const completion = await trackOpenAICall(`KYC localize ${languageCode}`, () =>
     openai.chat.completions.create({
       model: OPENAI_CHAT_MODEL,
-      ...withSupportedTemperature(OPENAI_CHAT_MODEL, 1),
+      ...withSupportedTemperature(OPENAI_CHAT_MODEL, hinglishMode ? 0.2 : 0.4),
       messages: [
         {
           role: 'system',
-          content: hinglishMode
-            ? `Convert Carely KYC text into natural Hindi written in Devanagari script.
+          content: hinglishMode && transcriptScriptMode
+            ? `Convert Carely KYC transcript text into proper Hindi written in Devanagari script.
 
 Rules:
 - Return only patient-facing Hindi text in Devanagari.
@@ -670,11 +705,25 @@ Rules:
 - Keep common medical terms readable: BP, sugar, diabetes, thyroid, cholesterol, surgery, medicine, hospital, ECG, MRI, CT, HIV, AIDS.
 - Do not add "agar haan", "if yes", or extra detail instructions unless they are present in the source text.
 - Do not add explanations or notes.`
-            : `You translate Carely KYC assistant text into ${languageName}.
+            : hinglishMode
+              ? `Convert Carely KYC avatar speech into natural Indian Hinglish written only in Roman script.
+
+Rules:
+- Return only the patient-facing line.
+- Sound like a doctor in India speaking naturally to a patient on a video call.
+- Use simple conversational Hindi flow mixed with common English medical/form words.
+- Prefer Hinglish like "Kya aapko diabetes, thyroid ya sugar ki problem hai?" instead of pure formal Hindi.
+- Prefer spoken phrases like "aapka", "janam tareekh", "nominee", "please", "haan ya nahi", "theek hai".
+- Use only ASCII/Roman letters. Do not use Devanagari or any Hindi script characters.
+- Preserve names, numbers, dates, acronyms, and form labels accurately.
+- Keep common terms readable: BP, sugar, diabetes, thyroid, cholesterol, surgery, medicine, hospital, ECG, MRI, CT, HIV, AIDS.
+- Do not add "agar haan", "if yes", or extra detail instructions unless they are present in the source text.
+- Do not add explanations or notes.`
+            : `You translate Carely KYC assistant text into natural spoken ${languageName} for a doctor-patient video call.
 
 Rules:
 - Return only the translated patient-facing text.
-- Keep the tone warm and direct.
+- Keep the tone warm, direct, and conversational rather than literary or overly formal.
 - Preserve names, numbers, dates, and form labels accurately.
 - Translate "Yes" and "No" naturally for ${languageName}.
 - Do not add explanations or notes.`,
@@ -684,7 +733,14 @@ Rules:
     })
   );
 
-  return completion.choices[0]?.message?.content?.trim() || trimmed;
+  let output = completion.choices[0]?.message?.content?.trim() || trimmed;
+  if (hinglishMode && !transcriptScriptMode) {
+    output = await rewriteAsRomanHinglish(output, languageCode);
+  } else if (containsDevanagariText(output) && !transcriptScriptMode && !hinglishMode) {
+    output = normalizeTranscriptEncoding(output);
+  }
+
+  return output;
 }
 
 async function normalizeKycAnswer({
@@ -1402,14 +1458,14 @@ async function trackOpenAICall(label, fn) {
   const n = openaiCallCount;
   const start = Date.now();
 
-  console.log(`\n[OPENAI #${n}] ${label} — START`);
+  console.log(`\n[OPENAI #${n}] ${label} â€” START`);
 
   try {
     const result = await fn();
-    console.log(`[OPENAI #${n}] ${label} — OK (${Date.now() - start}ms)`);
+    console.log(`[OPENAI #${n}] ${label} â€” OK (${Date.now() - start}ms)`);
     return result;
   } catch (err) {
-    console.log(`[OPENAI #${n}] ${label} — FAIL (${Date.now() - start}ms)`);
+    console.log(`[OPENAI #${n}] ${label} â€” FAIL (${Date.now() - start}ms)`);
     throw err;
   }
 }
@@ -1493,16 +1549,16 @@ app.post('/api/voice', upload.single('audio'), async (req, res) => {
       });
     }
 
-    const isHindi = /[ऀ-ॿ]/.test(spokenText);
+    const isHindi = /[\u0900-\u097F]/.test(spokenText);
 
     const escalationTriggers = [
       'severe pain',
       'chest pain',
       'shortness of breath',
       'bleeding',
-      'बहुत दर्द',
-      'सांस नहीं',
-      'खून',
+      'à¤¬à¤¹à¥à¤¤ à¤¦à¤°à¥à¤¦',
+      'à¤¸à¤¾à¤‚à¤¸ à¤¨à¤¹à¥€à¤‚',
+      'à¤–à¥‚à¤¨',
     ];
 
     const needsNurse = escalationTriggers.some(t =>
@@ -1513,7 +1569,7 @@ app.post('/api/voice', upload.single('audio'), async (req, res) => {
 
     if (needsNurse) {
       aiResponseText = isHindi
-        ? 'मैं अभी एक अलर्ट बना रहा हूँ ताकि आप सीधे नर्स से बात कर सकें।'
+        ? 'à¤®à¥ˆà¤‚ à¤…à¤­à¥€ à¤à¤• à¤…à¤²à¤°à¥à¤Ÿ à¤¬à¤¨à¤¾ à¤°à¤¹à¤¾ à¤¹à¥‚à¤ à¤¤à¤¾à¤•à¤¿ à¤†à¤ª à¤¸à¥€à¤§à¥‡ à¤¨à¤°à¥à¤¸ à¤¸à¥‡ à¤¬à¤¾à¤¤ à¤•à¤° à¤¸à¤•à¥‡à¤‚à¥¤'
         : 'I am creating an alert now so you can speak with a nurse directly.';
     } else {
       const chat = await trackOpenAICall(
@@ -2029,7 +2085,7 @@ app.post('/api/sarvam/transcribe', upload.single('audio'), async (req, res) => {
         const speaker = seg.speaker || seg.speaker_id || 'Speaker';
         const text = (seg.text || seg.transcript || '').trim();
         if (!text) return null;
-        return `[${start} → ${end}] ${speaker}:\n${text}`;
+        return `[${start} â†’ ${end}] ${speaker}:\n${text}`;
       })
       .filter(Boolean)
       .join('\n\n');
@@ -2093,6 +2149,12 @@ app.post('/api/beyondpresence/start-session', async (req, res) => {
       preferredLanguage && preferredLanguage !== 'en'
         ? stripInlineYesDetailInstruction(await localizeKycText(fieldListBase, preferredLanguage))
         : fieldListBase;
+    const totalFieldCount = kycFields.length;
+    const lastFieldPrompt = stripInlineYesDetailInstruction(
+      kycFields[kycFields.length - 1]?.prompt ||
+        kycFields[kycFields.length - 1]?.label ||
+        '',
+    );
 
     const firstFieldPrompt =
       String(openingPrompt || '').trim() ||
@@ -2101,11 +2163,9 @@ app.post('/api/beyondpresence/start-session', async (req, res) => {
 
     const baseGreetingText = `Hi, my name is Dr. Tara. Let's start your medical check-up. ${firstFieldPrompt}`;
     const greetingText =
-      preferredLanguage === 'hi'
-        ? 'हाय, मेरा नाम Dr. Tara है। चलिए आपका मेडिकल चेक-अप शुरू करते हैं। आपका application number क्या है?'
-        : preferredLanguage && preferredLanguage !== 'en'
-          ? await localizeKycText(baseGreetingText, preferredLanguage)
-          : baseGreetingText;
+      preferredLanguage && preferredLanguage !== 'en'
+        ? await localizeKycText(baseGreetingText, preferredLanguage)
+        : baseGreetingText;
 
     const speechInstruction =
       providerLanguage !== requestedLanguage
@@ -2121,6 +2181,9 @@ ${fieldListText}
 
 Rules:
 - You are not a general chatbot. Never answer personal questions, medical advice questions, or requests outside this form. Continue asking the current KYC field instead.
+- If the selected patient language is Hindi/Hinglish, keep questions conversational Hinglish and end yes/no questions with "haan ya nahi?".
+- You must ask every numbered field from 1 through ${totalFieldCount}. Do not announce completion until field ${totalFieldCount} has been answered: "${lastFieldPrompt}".
+- Existing insurance cover is not the last field. After it, continue to life cover, critical illness cover, and the final declaration if they appear in the numbered list.
 - Ask only one field at a time and wait for the answer before moving on.
 - If gender is male, skip all [FEMALE ONLY] fields silently. If gender is female, skip all [MALE ONLY] fields silently.
 - Never use ALL CAPS, shouting, or dramatic emphasis.
@@ -2129,11 +2192,12 @@ Rules:
 - Use a short acknowledgment, then move directly to the next question.
 - For names or dates, only ask for clarification if the answer was genuinely unclear or incomplete.
 - For yes/no fields, ask only the yes/no question first. Do not append "if yes, give details" to the same question.
-- A yes/no field question must stop after asking for Yes/No. In Hindi, end with "हाँ या नहीं?" and nothing about details.
-- Never say "अगर हाँ", "agar haan", "if yes", "toh detail", "thoda detail", or "please give details" inside the main yes/no question.
-- If a yes/no field has requiresReasonOnYes and the patient says No, move to the next numbered field.
-- If a yes/no field has requiresReasonOnYes and the patient says Yes, ask two short follow-ups before moving on: first ask for the condition/reason ("Which one?" or "Please tell me the condition or reason."), then ask "Since how long?".
+  - For Hindi/Hinglish avatar speech, prefer roman Hinglish like "haan ya nahi?" over pure Devanagari Hindi.
+  - A yes/no field question must stop after asking for Yes/No. For Hindi/Hinglish, end naturally in Roman Hinglish like "haan ya nahi?" and nothing about details. If the selected language is English, never add Hindi words or Devanagari text.
+  - Never say "agar haan", "if yes", "toh detail", "thoda detail", or "please give details" inside the main yes/no question.
 - Keep those two follow-up answers attached to the same numbered field. Never use them as answers for the next field.
+- If a field needs a reason after "Yes", a bare "Yes", "No", "haan", or "nahi" is not a valid reason. Ask again for the actual condition or reason and stay on the same field.
+- If you asked "Since how long?" and the answer does not contain duration information, ask again and stay on the same field.
 - Do not ask recovery status, current status, treatment advice, or confirmation questions unless that exact field needs a missing answer.
 - Never move to the next numbered field until both required yes-detail follow-ups have been answered or the patient says they do not know.
 - If an answer is unclear, ask for clarification once, then continue.
@@ -2174,10 +2238,48 @@ Rules:
     const agentId = agentData.id;
     console.log(`[BeyondPresence] Agent created: ${agentId}`);
 
+    console.log('[BeyondPresence] Creating LiveKit call...');
+    const callRes = await fetch(`${BEY_API_BASE}/v1/calls`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': BEY_API_KEY,
+      },
+      body: JSON.stringify({
+        agent_id: agentId,
+        livekit_username: 'Patient',
+        tags: {
+          source: 'carely-kyc',
+          preferred_language: providerLanguage,
+          requested_language: preferredLanguage || requestedLanguage || 'en',
+        },
+      }),
+    });
+
+    const callData = await callRes.json();
+    if (!callRes.ok || !callData?.livekit_url || !callData?.livekit_token) {
+      console.error('[BeyondPresence] Call creation failed:', callData);
+
+      await fetch(`${BEY_API_BASE}/v1/agents/${agentId}`, {
+        method: 'DELETE',
+        headers: { 'x-api-key': BEY_API_KEY },
+      }).catch((err) =>
+        console.warn('[BeyondPresence] Agent cleanup after call failure failed:', err)
+      );
+
+      return res.status(callRes.status || 500).json({
+        error: extractProviderErrorMessage(callData, 'Failed to create Beyond Presence call'),
+      });
+    }
+
+    console.log(`[BeyondPresence] LiveKit call created: ${callData.id}`);
+
     res.json({
       agentId,
-      agentUrl: `https://bey.chat/${agentId}`,
-      mode: 'iframe_embed',
+      callId: callData.id,
+      livekitUrl: callData.livekit_url,
+      livekitToken: callData.livekit_token,
+      mode: 'managed_livekit_call_api',
     });
   } catch (err) {
     console.error('BEYOND PRESENCE START ERROR:', err);
@@ -2224,58 +2326,6 @@ app.get('/api/beyondpresence/call-messages/:callId', async (req, res) => {
     res.json(messagesData);
   } catch (err) {
     console.error('BEYOND PRESENCE MESSAGES ERROR:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// =====================
-// /api/beyondpresence/agent-call-messages
-// =====================
-app.get('/api/beyondpresence/agent-call-messages/:agentId', async (req, res) => {
-  try {
-    if (!BEY_API_KEY) {
-      return res.status(500).json({ error: 'BEYOND_PRESENCE_API_KEY not configured' });
-    }
-
-    const { agentId } = req.params;
-    const callsRes = await fetch(`${BEY_API_BASE}/v1/calls?limit=50`, {
-      headers: { 'x-api-key': BEY_API_KEY },
-    });
-    const callsData = await callsRes.json();
-
-    if (!callsRes.ok) {
-      return res.status(callsRes.status || 500).json({
-        error: extractProviderErrorMessage(callsData, 'Failed to list Beyond Presence calls'),
-      });
-    }
-
-    const calls = Array.isArray(callsData?.data) ? callsData.data : [];
-    const latestCall = calls
-      .filter((call) => call.agent_id === agentId)
-      .sort((a, b) => new Date(b.started_at || 0).getTime() - new Date(a.started_at || 0).getTime())[0];
-
-    if (!latestCall?.id) {
-      return res.json({ callId: null, messages: [], call: null });
-    }
-
-    const messagesRes = await fetch(`${BEY_API_BASE}/v1/calls/${latestCall.id}/messages`, {
-      headers: { 'x-api-key': BEY_API_KEY },
-    });
-    const messagesData = await messagesRes.json();
-
-    if (!messagesRes.ok) {
-      return res.status(messagesRes.status || 500).json({
-        error: extractProviderErrorMessage(messagesData, 'Failed to load Beyond Presence call messages'),
-      });
-    }
-
-    res.json({
-      callId: latestCall.id,
-      call: latestCall,
-      messages: Array.isArray(messagesData) ? messagesData : [],
-    });
-  } catch (err) {
-    console.error('BEYOND PRESENCE AGENT MESSAGES ERROR:', err);
     res.status(500).json({ error: err.message });
   }
 });
