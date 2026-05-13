@@ -48,7 +48,7 @@ const LIVE_DOCTOR_STT_PROMPT = [
   'Common answers include: non-applicable, not applicable, N/A, male, female, yes, no, nominee, and dates of birth.',
   'Do not turn short answers like male, female, yes, or no into similar sounding words such as meal, deal, mail, or know.',
   'If the user spells a name letter by letter, preserve the letters clearly rather than guessing a phonetic word.',
-  'Common patient and nominee names in this demo include Sankalp Khira and Harshita Khira.',
+  'Do not bias transcription toward any specific demo person name.',
   'If the user says both a spoken name and then spells it, keep the spelled letters as the authoritative version.',
 ].join(' ');
 

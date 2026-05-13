@@ -12,6 +12,8 @@ export default function BeyondPresenceStream({
   onRoomRef,
   onSpeakingChange,
   onListeningChange,
+  onRemoteAudioTrack,
+  onLocalAudioTrack,
   isMuted = false,
 }) {
   const videoRef = useRef(null);
@@ -27,6 +29,8 @@ export default function BeyondPresenceStream({
     onRoomRef,
     onSpeakingChange,
     onListeningChange,
+    onRemoteAudioTrack,
+    onLocalAudioTrack,
   });
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState(null);
@@ -42,6 +46,8 @@ export default function BeyondPresenceStream({
       onRoomRef,
       onSpeakingChange,
       onListeningChange,
+      onRemoteAudioTrack,
+      onLocalAudioTrack,
     };
   });
 
@@ -74,6 +80,30 @@ export default function BeyondPresenceStream({
     let selectedVideoParticipantIdentity = normalizedTargetAvatarIdentity || null;
     let attachedVideoTrackSid = null;
     let roomConnected = false;
+
+    const rerouteAudioOutputs = async (reason = 'audio_refresh') => {
+      const audioElements = audioElementsRef.current.filter((el) => el.isConnected);
+      audioElementsRef.current = audioElements;
+
+      await Promise.all(audioElements.map(async (audioEl) => {
+        audioEl.muted = false;
+        audioEl.volume = 1;
+
+        if (typeof audioEl.setSinkId === 'function') {
+          try {
+            await audioEl.setSinkId('default');
+          } catch (err) {
+            console.warn('[BeyondPresence] Audio output routing failed:', reason, err);
+          }
+        }
+
+        try {
+          await audioEl.play?.();
+        } catch (err) {
+          console.warn('[BeyondPresence] Avatar audio play needs user gesture:', reason, err);
+        }
+      }));
+    };
 
     const isAvatarParticipant = (participant) => {
       const rawIdentity = String(participant?.identity || '');
@@ -242,8 +272,8 @@ export default function BeyondPresenceStream({
       if (!normalized) return false;
       return (
         normalized.includes('?') ||
-        /^(hi|hello|thank|thanks|got it|great|okay|ok|please|could you|can you|what is|what's|now|next)\b/.test(normalized) ||
-        /\b(please|tell me|could you|can you|what is|what's|date of birth|full name|application number|medical check-up|let'?s start)\b/.test(normalized)
+        /^(hi|hello|thank|thanks|got it|great|okay|ok|please|could you|can you|what is|what's|now|next|alright|understood|noted|appreciated|perfect)\b/.test(normalized) ||
+        /\b(please|tell me|could you|can you|what is|what's|date of birth|full name|application number|medical check-up|let'?s start|do you have|have you|are you|what is your|what is your nominee|please provide|please share|please tell me|thanks for sharing|thank you for sharing)\b/.test(normalized)
       );
     };
 
@@ -280,10 +310,25 @@ export default function BeyondPresenceStream({
         audioEl.style.display = 'none';
         audioEl.autoplay = true;
         audioEl.playsInline = true;
+        audioEl.muted = false;
+        audioEl.volume = 1;
         document.body.appendChild(audioEl);
         audioElementsRef.current.push(audioEl);
+        callbacksRef.current.onRemoteAudioTrack?.(track.mediaStreamTrack);
+        rerouteAudioOutputs('track_subscribed');
       }
     });
+
+    if (RoomEvent.LocalTrackPublished) {
+      room.on(RoomEvent.LocalTrackPublished, (publication) => {
+        const mediaTrack =
+          publication?.audioTrack?.mediaStreamTrack ||
+          publication?.track?.mediaStreamTrack;
+        if (mediaTrack) {
+          callbacksRef.current.onLocalAudioTrack?.(mediaTrack);
+        }
+      });
+    }
 
     room.on(RoomEvent.TrackUnsubscribed, (track, publication, participant) => {
       track.detach().forEach((el) => el.remove());
@@ -475,6 +520,7 @@ export default function BeyondPresenceStream({
     room.on(RoomEvent.Reconnected, () => {
       console.log('[BeyondPresence] Room reconnected');
       window.setTimeout(() => refreshAvatarVideo('room_reconnected'), 200);
+      window.setTimeout(() => rerouteAudioOutputs('room_reconnected'), 250);
     });
 
     room.on(RoomEvent.ConnectionStateChanged, (state) => {
@@ -511,6 +557,14 @@ export default function BeyondPresenceStream({
             noiseSuppression: true,
             autoGainControl: true,
           });
+          const micPublication =
+            room.localParticipant.getTrackPublication?.(Track.Source.Microphone);
+          const micTrack =
+            micPublication?.audioTrack?.mediaStreamTrack ||
+            micPublication?.track?.mediaStreamTrack;
+          if (micTrack) {
+            callbacksRef.current.onLocalAudioTrack?.(micTrack);
+          }
           setListening(!isMuted);
           console.log('[BeyondPresence] Microphone ready');
         } catch (err) {
@@ -518,6 +572,7 @@ export default function BeyondPresenceStream({
         }
 
         window.setTimeout(() => refreshAvatarVideo('initial_connect'), 250);
+        window.setTimeout(() => rerouteAudioOutputs('initial_connect'), 300);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -533,9 +588,15 @@ export default function BeyondPresenceStream({
       }
     }, 2000);
 
+    const onDeviceChange = () => {
+      window.setTimeout(() => rerouteAudioOutputs('devicechange'), 500);
+    };
+    navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
+
     return () => {
       cancelled = true;
       window.clearInterval(videoHealInterval);
+      navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
       callbacksRef.current.onRoomRef?.(null);
       audioElementsRef.current.forEach((el) => el.remove());
       audioElementsRef.current = [];
@@ -556,6 +617,14 @@ export default function BeyondPresenceStream({
       noiseSuppression: true,
       autoGainControl: true,
     }).then(() => {
+      const micPublication =
+        room.localParticipant.getTrackPublication?.(Track.Source.Microphone);
+      const micTrack =
+        micPublication?.audioTrack?.mediaStreamTrack ||
+        micPublication?.track?.mediaStreamTrack;
+      if (micTrack) {
+        callbacksRef.current.onLocalAudioTrack?.(micTrack);
+      }
       if (!speaking) {
         setListening(!isMuted);
       }

@@ -1118,6 +1118,12 @@ const PRESET_DEMO_KYC_FIELDS = [
       "In the last 5 years, have you had or been advised to have any X-ray, CT scan, MRI, ECG, blood test, or surgery?",
     followUpIfYes: "Please give brief details.",
     reasonPromptLabel: "If yes, please give details",
+    matchHints: [
+      "which test or surgery",
+      "what tests or surgery",
+      "share what tests or surgery",
+      "advised to have",
+    ],
     reasonResponseId: "diagnostic_tests_reason",
     requiresReasonOnYes: true,
     genderRestriction: "all",
@@ -1223,6 +1229,13 @@ const PRESET_DEMO_KYC_FIELDS = [
       "Have you been hospitalized for C-section, stone removal, appendicectomy, piles, or hernia?",
     followUpIfYes: "Please give brief details.",
     reasonPromptLabel: "If yes, please give details",
+    matchHints: [
+      "which procedure among those",
+      "stone removal",
+      "appendicectomy",
+      "hernia",
+      "c section",
+    ],
     reasonResponseId: "hospitalization_common_surgeries_reason",
     requiresReasonOnYes: true,
     genderRestriction: "all",
@@ -1240,6 +1253,10 @@ const PRESET_DEMO_KYC_FIELDS = [
       "Have you been hospitalized for malaria, typhoid, dengue, gastroenteritis, or dehydration and are now normal?",
     followUpIfYes: "Please give brief details.",
     reasonPromptLabel: "If yes, please give details",
+    matchHints: [
+      "malaria typhoid dengue gastroenteritis dehydration",
+      "and are now normal",
+    ],
     reasonResponseId: "hospitalization_infection_recovery_reason",
     requiresReasonOnYes: true,
     genderRestriction: "all",
@@ -1255,6 +1272,7 @@ const PRESET_DEMO_KYC_FIELDS = [
     prompt: "Are there any other hospitalization details you want to furnish?",
     followUpIfYes: "Please give brief details.",
     reasonPromptLabel: "If yes, please give details",
+    matchHints: ["other hospitalization details", "want to furnish"],
     reasonResponseId: "other_hospitalization_details_reason",
     requiresReasonOnYes: true,
     genderRestriction: "all",
@@ -1272,6 +1290,7 @@ const PRESET_DEMO_KYC_FIELDS = [
       "Have you been off work due to illness for a continuous period of more than 10 days during the last year?",
     followUpIfYes: "Please give brief details.",
     reasonPromptLabel: "If yes, please give details",
+    matchHints: ["off work due to illness", "continuous period of more than 10 days"],
     reasonResponseId: "off_work_illness_reason",
     requiresReasonOnYes: true,
     genderRestriction: "all",
@@ -1288,6 +1307,7 @@ const PRESET_DEMO_KYC_FIELDS = [
       "Have you suffered or are you suffering from any other disease, ailment, or habit not mentioned above?",
     followUpIfYes: "Please give brief details.",
     reasonPromptLabel: "If yes, please give details",
+    matchHints: ["other disease ailment habit not mentioned above"],
     reasonResponseId: "other_disease_reason",
     requiresReasonOnYes: true,
     genderRestriction: "all",
@@ -1303,6 +1323,11 @@ const PRESET_DEMO_KYC_FIELDS = [
     prompt: "Do you intend to travel outside India within the next 3 months?",
     followUpIfYes: "Please tell me the destination.",
     reasonPromptLabel: "If yes, please tell me the destination",
+    matchHints: [
+      "travel outside india within the next 3 months",
+      "which country you plan to travel to",
+      "which country do you intend to travel to",
+    ],
     reasonResponseId: "travel_outside_india_reason",
     requiresReasonOnYes: true,
     genderRestriction: "all",
@@ -1316,6 +1341,7 @@ const PRESET_DEMO_KYC_FIELDS = [
     type: "number",
     section: "Physical",
     prompt: "What is your height in centimeters?",
+    matchHints: ["height in centimeters", "height in cm"],
     acroFieldName: "p2_field_13",
     genderRestriction: "all",
   },
@@ -1325,6 +1351,7 @@ const PRESET_DEMO_KYC_FIELDS = [
     type: "number",
     section: "Physical",
     prompt: "What is your weight in kilograms?",
+    matchHints: ["weight in kilograms", "weight in kgs"],
     acroFieldName: "p2_field_14",
     genderRestriction: "all",
   },
@@ -1346,6 +1373,7 @@ const PRESET_DEMO_KYC_FIELDS = [
     section: "Insurance",
     prompt:
       "Do you have any existing insurance cover? If yes, please provide the details. If none, say none.",
+    matchHints: ["existing insurance cover", "if none say none"],
     acroFieldName: "p2_field_16",
     genderRestriction: "all",
   },
@@ -1356,6 +1384,12 @@ const PRESET_DEMO_KYC_FIELDS = [
     section: "Insurance",
     prompt:
       "What is the total value of all your life cover together? Please give the amount in numbers.",
+    matchHints: [
+      "total value of all your life cover together",
+      "life cover together",
+      "amount in numbers",
+      "life cover in numbers only",
+    ],
     acroFieldName: "p2_field_17",
     genderRestriction: "all",
   },
@@ -1366,6 +1400,11 @@ const PRESET_DEMO_KYC_FIELDS = [
     section: "Insurance",
     prompt:
       "What is the total value of your critical illness cover? If none, say zero.",
+    matchHints: [
+      "critical illness cover",
+      "if none say zero",
+      "total value of your critical illness cover",
+    ],
     acroFieldName: "p2_field_18",
     genderRestriction: "all",
   },
@@ -1377,6 +1416,10 @@ const PRESET_DEMO_KYC_FIELDS = [
     section: "Declaration",
     prompt:
       "Do you declare that all the particulars and answers you have provided are complete and true? Please answer yes or no.",
+    matchHints: [
+      "declare complete and true",
+      "particulars and answers you have provided are complete and true",
+    ],
     genderRestriction: "all",
   },
 ];
@@ -1888,6 +1931,31 @@ const hasRecordedKycValue = (value) =>
 
 const padKycDatePart = (value) => String(value).padStart(2, "0");
 
+const getTodayKycDateForPdf = () => {
+  const now = new Date();
+  return `${padKycDatePart(now.getDate())}/${padKycDatePart(now.getMonth() + 1)}/${now.getFullYear()}`;
+};
+
+const drawPresetAutoDate = (pages, font) => {
+  const page = pages?.[0];
+  if (!page || !font) return;
+  drawMappedPdfText(
+    page,
+    font,
+    getTodayKycDateForPdf(),
+    {
+      type: "date",
+      page: 1,
+      inputX: 384,
+      inputY: 184,
+      width: 120,
+      height: 12,
+      fontSize: 8,
+    },
+    page.getHeight(),
+  );
+};
+
 const formatDateOfBirthForPdf = (value) => {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -2360,6 +2428,63 @@ const getSpelledNameCompact = (input) => {
   );
 };
 
+const getSpelledNameWords = (input) => {
+  const raw = String(input || "");
+  const normalized = raw
+    .replace(/\b(?:space|blank|gap)\b/gi, "|")
+    .replace(/\b(?:surname|last name|family name)\b/gi, "|")
+    .replace(/[,\n;:/]+/g, "|");
+  const groups = normalized
+    .split("|")
+    .map((group) => {
+      const letters = group.match(/\b[a-z]\b/gi);
+      return letters?.length >= 2 ? letters.join("").toLowerCase() : "";
+    })
+    .filter(Boolean);
+
+  return groups.length >= 2 ? groups : [];
+};
+
+const splitCompactSpelledName = (compact, previousValue = "") => {
+  const compactName = String(compact || "").replace(/[^a-z]/gi, "").toLowerCase();
+  if (compactName.length < 8) return compactName;
+
+  const previousParts = String(previousValue || "")
+    .trim()
+    .split(/\s+/)
+    .filter((part) => /^[a-z'.-]+$/i.test(part));
+  if (previousParts.length >= 2) {
+    const firstLength = previousParts[0].replace(/[^a-z]/gi, "").length;
+    if (firstLength >= 2 && compactName.length > firstLength + 2) {
+      return `${compactName.slice(0, firstLength)} ${compactName.slice(firstLength)}`;
+    }
+  }
+
+  const surnameStarts = [
+    "chaudh",
+    "choudh",
+    "kumar",
+    "singh",
+    "patel",
+    "sharma",
+    "verma",
+    "gupta",
+    "jain",
+    "rao",
+    "reddy",
+  ];
+  for (const start of surnameStarts) {
+    const index = compactName.indexOf(start, 2);
+    if (index >= 2 && compactName.length - index >= 3) {
+      return `${compactName.slice(0, index)} ${compactName.slice(index)}`;
+    }
+  }
+
+  const splitAt = Math.min(8, Math.max(3, Math.round(compactName.length * 0.42)));
+  if (compactName.length - splitAt < 3) return compactName;
+  return `${compactName.slice(0, splitAt)} ${compactName.slice(splitAt)}`;
+};
+
 const formatNameForPdf = (value) => {
   let cleaned = String(value ?? "")
     .replace(
@@ -2370,48 +2495,12 @@ const formatNameForPdf = (value) => {
     .replace(/\s+/g, " ")
     .trim();
   const spelledCompact = getSpelledNameCompact(value);
+  const spelledWords = getSpelledNameWords(value);
 
-  const nameFixes = {
-    "so fish chowdering": "Satish Chaudhary",
-    "satish chalk": "Satish Chaudhary",
-    "satish choubhary": "Satish Chaudhary",
-    "satish choudhary": "Satish Chaudhary",
-    "satish chaudhry": "Satish Chaudhary",
-    chalk: "Chaudhary",
-    choubhary: "Chaudhary",
-    choudhary: "Chaudhary",
-    chaudhry: "Chaudhary",
-    "sapna chog": "Sapna Chaudhary",
-    chog: "Chaudhary",
-    "sankop kira": "Sankalp Khira",
-    "sankalp kira": "Sankalp Khira",
-    "sankalp khira": "Sankalp Khira",
-    "sankalp kheera": "Sankalp Khira",
-    "sankalp kh eera": "Sankalp Khira",
-    "sankal khira": "Sankalp Khira",
-    "kira alpacaera": "Sankalp Khira",
-    "alpacaera kira": "Sankalp Khira",
-  };
-  const spelledNameFixes = {
-    sankalpkhira: "Sankalp Khira",
-    sankalpakhira: "Sankalp Khira",
-    sankalpkheera: "Sankalp Khira",
-    satishchaudhary: "Satish Chaudhary",
-    satishchoudhary: "Satish Chaudhary",
-    satishchoubhary: "Satish Chaudhary",
-  };
-
-  const lowerCleaned = cleaned.toLowerCase();
-  for (const [wrong, right] of Object.entries(nameFixes)) {
-    if (lowerCleaned.includes(wrong)) {
-      cleaned = cleaned.replace(new RegExp(wrong, "gi"), right);
-    }
-  }
-
-  if (spelledCompact && spelledNameFixes[spelledCompact]) {
-    cleaned = spelledNameFixes[spelledCompact];
+  if (spelledWords.length >= 2) {
+    cleaned = spelledWords.join(" ");
   } else if (spelledCompact && /^[a-z](?:\s+[a-z]){3,}$/i.test(cleaned)) {
-    cleaned = spelledCompact;
+    cleaned = splitCompactSpelledName(spelledCompact, cleaned);
   }
 
   return cleaned
@@ -2576,11 +2665,18 @@ const isKycFieldAwaitingReason = (field, responses = {}) =>
   Boolean(
     field?.requiresReasonOnYes &&
     responses[field.id] === "Yes" &&
-    !hasRecordedKycValue(responses[field.reasonResponseId]),
+    (!hasRecordedKycValue(responses[field.reasonResponseId]) ||
+      (field.id !== "travel_outside_india" &&
+        !hasDurationPhrase(responses[field.reasonResponseId]))),
   );
 
-const getKycReasonFollowUpPrompt = (field, phase = "detail") => {
-  if (phase === "duration") return "Since how long?";
+const getKycReasonFollowUpPrompt = (field, phase = "detail", detail = "") => {
+  const cleanDetail = extractReasonFromAffirmativeAnswer(detail);
+  if (phase === "duration") {
+    return cleanDetail
+      ? `For how long have you had ${cleanDetail}?`
+      : "For how long have you had this condition?";
+  }
   const label = String(field?.label || field?.prompt || "this condition").trim();
   if (/travel outside india|destination/i.test(label)) {
     return "Please tell me the destination.";
@@ -2598,9 +2694,7 @@ const getKycReasonFollowUpPrompt = (field, phase = "detail") => {
 
 const combineKycReasonParts = (detail = "", duration = "") => {
   const cleanDetail = extractReasonFromAffirmativeAnswer(detail);
-  const cleanDuration = extractReasonFromAffirmativeAnswer(duration)
-    .replace(/^(since|from|for)\b[\s,.:;-]*/i, "")
-    .trim();
+  const cleanDuration = extractReasonFromAffirmativeAnswer(duration).trim();
   const seen = new Set();
   return [cleanDetail, cleanDuration]
     .filter(Boolean)
@@ -2610,7 +2704,7 @@ const combineKycReasonParts = (detail = "", duration = "") => {
       seen.add(key);
       return true;
     })
-    .join(", ");
+    .join(". ");
 };
 
 const hasDurationPhrase = (text) => {
@@ -2633,6 +2727,35 @@ const hasDurationPhrase = (text) => {
 const hasCompleteInlineKycReason = (reason, sourceText = "") =>
   hasMeaningfulKycValue(reason) &&
   (hasDurationPhrase(reason) || hasDurationPhrase(sourceText));
+
+const shouldHoldPendingReasonBeforeAgentJump = (field, pendingReason) => {
+  if (!field?.requiresReasonOnYes) return false;
+  if (field.id === "travel_outside_india") return true;
+  return (
+    pendingReason?.phase === "duration" ||
+    hasMeaningfulKycValue(pendingReason?.detail)
+  );
+};
+
+const shouldResyncAfterMissedRequiredFollowUp = (field, nextField) => {
+  if (field?.id !== "travel_outside_india") return false;
+  return ["height_cm", "weight_kg", "habits_addictions"].includes(nextField?.id);
+};
+
+const isLikelyCurrentYesNoFormPrompt = (text, field) => {
+  if (!field || !isYesNoField(field)) return false;
+  const normalized = normalizeIndicSpeechText(text)
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return false;
+  if (!/\b(yes\s+or\s+no|haan\s+ya\s+nahi|haa?n\s+ya\s+na|yes\/no)\b/i.test(normalized)) {
+    return false;
+  }
+  return /[?]|\b(do you|have you|are you|is there|are there|kya|did you|will you)\b/i.test(
+    normalized,
+  );
+};
 
 const stripInlineYesDetailInstruction = (text) =>
   String(text || "")
@@ -2896,15 +3019,26 @@ const getTranscriptPromptFieldId = (text) => {
     .replace(/\s+/g, " ")
     .trim();
 
+  const compact = normalized.replace(/\s+/g, "");
+
   if (!normalized) return null;
   const hasRaw = (pattern) => pattern.test(raw);
-  if (normalized.includes("critical illness") || normalized.includes(" ci cover")) return "all_ci_cover";
+  if (
+    normalized.includes("critical illness") ||
+    normalized.includes(" ci cover") ||
+    (normalized.includes("ci") && normalized.includes("cover"))
+  ) return "all_ci_cover";
   if (normalized.includes("habits") || normalized.includes("addictions") || normalized.includes("smoking") || normalized.includes("tobacco") || normalized.includes("alcohol") || normalized.includes("drugs")) {
     return "habits_addictions";
   }
-  if (normalized.includes("existing insurance")) return "existing_insurance_cover";
+  if (
+    normalized.includes("existing insurance") ||
+    normalized.includes("existing cover") ||
+    normalized.includes("insurance cover") ||
+    compact.includes("existinginsurancecover")
+  ) return "existing_insurance_cover";
   if (normalized.includes("life cover")) return "all_life_cover";
-  if (normalized.includes("weight")) return "weight_kg";
+  if (normalized.includes("weight") || normalized.includes("kilograms") || normalized.includes("kgs")) return "weight_kg";
   if (normalized.includes("contact number") || normalized.includes("mobile number") || hasRaw(/à¤¸à¤‚à¤ªà¤°à¥à¤•|à¤®à¥‹à¤¬à¤¾à¤‡à¤²|à¤«à¥‹à¤¨/)) return "contact_no";
   if (normalized.includes("application number") || hasRaw(/application number|à¤†à¤µà¥‡à¤¦à¤¨|à¤à¤ªà¥à¤²à¤¿à¤•à¥‡à¤¶à¤¨/)) return "application_no";
   if (normalized.includes("gender") || hasRaw(/à¤²à¤¿à¤‚à¤—/)) return "gender";
@@ -2922,19 +3056,35 @@ const getTranscriptPromptFieldId = (text) => {
   }
   if (normalized.includes("date of birth") || normalized.includes("dob") || hasRaw(/à¤œà¤¨à¥à¤®.*(à¤¤à¤¿à¤¥à¤¿|à¤¦à¤¿à¤¨|à¤®à¤¹à¥€à¤¨à¤¾|à¤µà¤°à¥à¤·)|à¤œà¤¨à¥à¤®à¤¤à¤¿à¤¥à¤¿/)) return "date_of_birth";
   if (normalized.includes("education") || normalized.includes("qualification") || hasRaw(/à¤¶à¤¿à¤•à¥à¤·à¤¾|à¤¯à¥‹à¤—à¥à¤¯à¤¤à¤¾/)) return "education_details";
+  if (normalized.includes("pregnant") || normalized.includes("pregnancy")) {
+    return "pregnant";
+  }
+  if (
+    normalized.includes("mammogram") ||
+    normalized.includes("pap smear") ||
+    (normalized.includes("ultrasound") && !normalized.includes("pregnancy"))
+  ) {
+    return "women_tests";
+  }
+  if (normalized.includes("test results normal") || normalized.includes("result normal")) {
+    return "women_tests_results_normal";
+  }
+  if (normalized.includes("ultrasound") && normalized.includes("pregnancy")) {
+    return "ultrasound_pregnancy";
+  }
   if (normalized.includes("chest pain") || normalized.includes("heart attack") || normalized.includes("palpitations") || normalized.includes("breathlessness")) {
     return "chest_pain_history";
   }
   if (normalized.includes("hypertension") || normalized.includes("high bp") || normalized.includes("blood pressure") || normalized.includes("high cholesterol")) {
     return "hypertension";
   }
-  if (normalized.includes("diabetes") || normalized.includes("thyroid") || normalized.includes("high sugar") || normalized.includes("endocrine")) {
+  if (normalized.includes("diabetes") || normalized.includes("thyroid") || normalized.includes("high sugar") || normalized.includes("high blood sugar") || normalized.includes("endocrine")) {
     return "diabetes_thyroid";
   }
-  if (normalized.includes("asthma") || normalized.includes("bronchitis") || normalized.includes("wheezing") || normalized.includes("breathing problem")) {
+  if (normalized.includes("asthma") || normalized.includes("bronchitis") || normalized.includes("wheezing") || normalized.includes("breathing problem") || normalized.includes("breathing difficulties") || normalized.includes("tuberculosis")) {
     return "respiratory";
   }
-  if (normalized.includes("blood disorder") || normalized.includes("anemia") || normalized.includes("leukemia") || normalized.includes("circulation disorder")) {
+  if (normalized.includes("blood disorder") || normalized.includes("anemia") || normalized.includes("leukemia") || normalized.includes("circulation disorder") || normalized.includes("circulatory disorder")) {
     return "blood_disorder";
   }
   if (normalized.includes("liver") || normalized.includes("cirrhosis") || normalized.includes("hepatitis") || normalized.includes("jaundice") || normalized.includes("stomach")) {
@@ -2946,7 +3096,7 @@ const getTranscriptPromptFieldId = (text) => {
   if (normalized.includes("cancer") || normalized.includes("tumour") || normalized.includes("tumor") || normalized.includes("cyst") || normalized.includes("lymph")) {
     return "cancer_tumour";
   }
-  if (normalized.includes("kidney") || normalized.includes("stones") || normalized.includes("prostate") || normalized.includes("urine")) {
+  if (normalized.includes("kidney") || normalized.includes("kidney related") || normalized.includes("stones") || normalized.includes("prostate") || normalized.includes("urine")) {
     return "kidney_disease";
   }
   if (normalized.includes("epilepsy") || normalized.includes("nervous") || normalized.includes("tremors") || normalized.includes("paralysis") || normalized.includes("psychiatric")) {
@@ -2964,23 +3114,63 @@ const getTranscriptPromptFieldId = (text) => {
   if (normalized.includes("fever") && normalized.includes("hospital")) return "hospitalization_fever_normal";
   if (normalized.includes("food poisoning")) return "hospitalization_food_poisoning_normal";
   if (normalized.includes("accident")) return "hospitalization_accident_alright";
-  if (normalized.includes("c section") || normalized.includes("stone removal") || normalized.includes("appendicectomy") || normalized.includes("piles") || normalized.includes("hernia")) {
+  if (
+    normalized.includes("c section") ||
+    normalized.includes("stone removal") ||
+    normalized.includes("appendicectomy") ||
+    normalized.includes("hernia") ||
+    normalized.includes("piles")
+  ) {
     return "hospitalization_common_surgeries";
   }
-  if (normalized.includes("malaria") || normalized.includes("typhoid") || normalized.includes("dengue") || normalized.includes("dehydration")) {
+  if (
+    normalized.includes("malaria") ||
+    normalized.includes("typhoid") ||
+    normalized.includes("dengue") ||
+    normalized.includes("gastroenteritis") ||
+    normalized.includes("dehydration")
+  ) {
     return "hospitalization_infection_recovery";
   }
-  if (normalized.includes("other hospitalization")) return "other_hospitalization_details";
+  if (
+    normalized.includes("other hospitalization") ||
+    normalized.includes("hospitalization details") ||
+    normalized.includes("want to furnish") ||
+    compact.includes("otherhospitalization") ||
+    compact.includes("hospitalizationdetails")
+  ) return "other_hospitalization_details";
+  if (
+    normalized.includes("off work") ||
+    normalized.includes("10 days") ||
+    normalized.includes("continuous period") ||
+    (normalized.includes("illness") && normalized.includes("last year"))
+  ) return "off_work_illness";
+  if (
+    normalized.includes("other disease") ||
+    normalized.includes("ailment") ||
+    normalized.includes("habit not mentioned")
+  ) return "other_disease";
+  if (
+    (normalized.includes("travel") && normalized.includes("india")) ||
+    normalized.includes("country you plan to travel") ||
+    normalized.includes("country name again")
+  ) return "travel_outside_india";
+  if (normalized.includes("height") || normalized.includes("centimeters")) return "height_cm";
   if (normalized.includes("treatment") || normalized.includes("medicine") || normalized.includes("medication") || normalized.includes("hospitalized") || normalized.includes("undergone surgery")) {
     return "treatment_medication";
   }
   if (normalized.includes("x ray") || normalized.includes("ct scan") || normalized.includes("mri") || normalized.includes("ecg") || normalized.includes("tmt") || normalized.includes("blood test") || normalized.includes("diagnostic test")) {
     return "diagnostic_tests";
   }
-  if (normalized.includes("10 days") || normalized.includes("work se off") || normalized.includes("off work")) return "off_work_illness";
-  if (normalized.includes("other disease") || normalized.includes("ailment") || normalized.includes("habit")) return "other_disease";
-  if (normalized.includes("travel") && normalized.includes("india")) return "travel_outside_india";
-  if (normalized.includes("height")) return "height_cm";
+  if (
+    normalized.includes("total value of all your life cover") ||
+    normalized.includes("life cover together")
+  ) return "all_life_cover";
+  if (
+    normalized.includes("declare") ||
+    normalized.includes("complete and true") ||
+    normalized.includes("particulars and answers")
+  ) return "declaration";
   if (normalized.includes("declare") || normalized.includes("complete and true")) return "declaration";
 
   return null;
@@ -3034,7 +3224,7 @@ const cleanRecoveredTranscriptAnswer = (fieldId, text) => {
   if (fieldId === "habits_addictions" || fieldId === "existing_insurance_cover") {
     const normalized = normalizeIndicSpeechText(clean).toLowerCase().trim();
     if (isUnsafeKycPdfText(clean)) return "";
-    if (/^(none|no|nil|nothing|nahi|nahin|no cover|not applicable)$/i.test(normalized)) {
+    if (/^(none|no|not|nil|nothing|nahi|nahin|no cover|not applicable)$/i.test(normalized)) {
       return "No";
     }
     if (
@@ -3054,6 +3244,8 @@ const cleanRecoveredTranscriptAnswer = (fieldId, text) => {
     const normalizedName = normalize(formattedName);
     if (
       isUnsafeKycPdfText(clean) ||
+      isLikelyNumberOnlySpeech(clean) ||
+      !looksLikeValidKycName(formattedName) ||
       /^(top|bill|mail|male|female|other|yes|no|one|two|three|four|five|six|seven|eight|nine|zero|night|now|so|the|t|the t|the dish|dish)$/.test(
         normalizedName,
       ) ||
@@ -3070,6 +3262,7 @@ const cleanRecoveredTranscriptAnswer = (fieldId, text) => {
 const mergeRecoveredNamePart = (previous, next) => {
   const prev = formatNameForPdf(previous);
   const current = formatNameForPdf(next);
+  if (isLikelyNumberOnlySpeech(next)) return prev;
   if (!prev) return current;
   if (!current) return prev;
   const prevParts = prev.split(/\s+/).filter(Boolean);
@@ -3119,6 +3312,28 @@ const mergeRecoveredNamePart = (previous, next) => {
   return currentParts.length >= prevParts.length ? current : prev;
 };
 
+const getForwardUserTranscriptCandidates = (
+  messages,
+  assistantIndex,
+  maxUserMessages = 4,
+) => {
+  const candidates = [];
+  if (!Array.isArray(messages)) return candidates;
+  for (let look = assistantIndex + 1; look < messages.length; look += 1) {
+    const candidate = messages[look];
+    if (!candidate || candidate?.isHidden || candidate?.isSystem) continue;
+    if (candidate.role === "assistant") break;
+    if (candidate.role !== "user") continue;
+    const text = normalizeTranscriptEncoding(
+      candidate.content || candidate.displayContent || "",
+    ).trim();
+    if (!text || isNoisyTranscriptLine("user", text)) continue;
+    candidates.push(text);
+    if (candidates.length >= maxUserMessages) break;
+  }
+  return candidates;
+};
+
 const KYC_REASON_FIELD_IDS = new Set(
   PRESET_DEMO_KYC_FIELDS.filter((field) => field.requiresReasonOnYes).map(
     (field) => field.id,
@@ -3140,8 +3355,11 @@ const isLikelyTravelDestinationText = (text) => {
   if (/^(what|where|sorry|pardon|hello|hi|ok|okay|fine|thank|thanks|please)$/.test(normalized)) {
     return false;
   }
+  if (hasHabitKeyword(normalized) || hasDurationPhrase(normalized)) {
+    return false;
+  }
   if (
-    /\b(height|weight|centimeters?|cms?|kgs?|kilograms?|graduate|education|contact|number|phone|lakh|lakhs?|lacs?|crore|crores?|million|policy|cover|insurance)\b/.test(
+    /\b(height|weight|centimeters?|cms?|kgs?|kilograms?|graduate|education|contact|number|phone|lakh|lakhs?|lacs?|crore|crores?|million|policy|cover|insurance|habit|addiction|none|nil|zero|declare|true|complete)\b/.test(
       normalized,
     )
   ) {
@@ -3275,6 +3493,15 @@ const sanitizeKycReasonForField = (fieldId, value) => {
     return true;
   });
   return uniqueParts.slice(0, 2).join(", ");
+};
+
+const sanitizeKycReasonDuration = (value) => {
+  const cleaned = normalizeCommonReasonForPdf(
+    extractReasonFromAffirmativeAnswer(value),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+  return hasDurationPhrase(cleaned) ? cleaned : "";
 };
 
 const recoverKycResponsesFromTranscript = (messages = []) => {
@@ -3476,12 +3703,7 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
     if (msg?.isHidden || msg?.isSystem || msg.role !== "assistant") continue;
     const fieldId = getTranscriptPromptFieldId(msg.content || msg.displayContent || "");
     if (!fieldId) continue;
-    const candidates = [];
-    for (let look = idx - 2; look <= idx + 3; look += 1) {
-      const candidate = messages[look];
-      if (!candidate || candidate?.isHidden || candidate?.isSystem || candidate.role !== "user") continue;
-      candidates.push(normalizeTranscriptEncoding(candidate.content || candidate.displayContent || ""));
-    }
+    const candidates = getForwardUserTranscriptCandidates(messages, idx, 4);
     if (!candidates.length) continue;
 
     if (fieldId === "application_no" && !hasMeaningfulKycValue(recovered.application_no)) {
@@ -3515,6 +3737,70 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
       if (education) recovered.education_details = education;
     }
     if (
+      (fieldId === "life_to_be_assured_name" || fieldId === "nominee_name") &&
+      (!hasMeaningfulKycValue(recovered[fieldId]) ||
+        !looksLikeValidKycName(recovered[fieldId]) ||
+        String(recovered[fieldId] || "").trim().split(/\s+/).filter(Boolean).length < 2)
+    ) {
+      const bestName = candidates
+        .map((candidate) => cleanRecoveredTranscriptAnswer(fieldId, candidate))
+        .filter(Boolean)
+        .filter((candidate) => looksLikeValidKycName(candidate))
+        .sort((a, b) => {
+          const aWords = String(a || "").trim().split(/\s+/).filter(Boolean).length;
+          const bWords = String(b || "").trim().split(/\s+/).filter(Boolean).length;
+          if (bWords !== aWords) return bWords - aWords;
+          return String(b || "").length - String(a || "").length;
+        })[0];
+      if (bestName) recovered[fieldId] = bestName;
+    }
+    if (fieldId === "weight_kg" && !hasMeaningfulKycValue(recovered.weight_kg)) {
+      const weight = candidates
+        .map((candidate) => cleanRecoveredTranscriptAnswer(fieldId, candidate))
+        .find(Boolean);
+      if (weight) recovered.weight_kg = weight;
+    }
+    if (fieldId === "existing_insurance_cover" && !hasMeaningfulKycValue(recovered.existing_insurance_cover)) {
+      const insurance = candidates
+        .map((candidate) => cleanRecoveredTranscriptAnswer(fieldId, candidate))
+        .find((candidate) => {
+          if (!candidate) return false;
+          const normalized = normalizeIndicSpeechText(candidate).toLowerCase().trim();
+          if (/^(none|no|nil|nothing|no cover|not applicable)$/i.test(normalized)) return true;
+          return !hasHabitKeyword(candidate) && !/\b(lakhs?|lacs?|crores?|million|thousand)\b/i.test(normalized);
+        });
+      if (insurance) recovered.existing_insurance_cover = insurance;
+    }
+    if (fieldId === "all_life_cover" || fieldId === "all_ci_cover") {
+      const amount = candidates
+        .map((candidate) => ({
+          raw: candidate,
+          value: cleanRecoveredTranscriptAnswer(fieldId, candidate),
+        }))
+        .filter((candidate) => candidate.value)
+        .sort((a, b) => {
+          const aHasUnit = /\b(lakhs?|lacs?|crores?)\b/i.test(a.raw);
+          const bHasUnit = /\b(lakhs?|lacs?|crores?)\b/i.test(b.raw);
+          if (aHasUnit !== bHasUnit) return bHasUnit ? 1 : -1;
+          return Number(b.value) - Number(a.value);
+        })[0]?.value;
+      if (amount) recovered[fieldId] = amount;
+    }
+    if (
+      fieldId === "travel_outside_india" &&
+      (!hasMeaningfulKycValue(recovered.travel_outside_india_reason) ||
+        String(recovered.travel_outside_india_reason || "").trim().length < 5)
+    ) {
+      const destination = candidates
+        .map((candidate) => cleanRecoveredTranscriptAnswer(fieldId, candidate))
+        .filter((candidate) => isLikelyTravelDestinationText(candidate))
+        .sort((a, b) => String(b || "").length - String(a || "").length)[0];
+      if (destination) {
+        recovered.travel_outside_india = "Yes";
+        recovered.travel_outside_india_reason = destination;
+      }
+    }
+    if (
       fieldId === "habits_addictions" &&
       (!hasMeaningfulKycValue(recovered.habits_addictions) ||
         !hasHabitKeyword(recovered.habits_addictions))
@@ -3527,6 +3813,24 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
         recovered.habits_addictions = cleanHabitAnswerForPdf(
           combineKycReasonParts(habit, duration),
         );
+      }
+    }
+    if (isReasonKycFieldId(fieldId)) {
+      const field = getPresetKycFieldById(fieldId);
+      const reasonParts = candidates
+        .map((candidate) => extractReasonFromAffirmativeAnswer(candidate))
+        .filter((candidate) => hasMeaningfulKycValue(candidate))
+        .filter((candidate) => !isLikelyNonReasonAnswerForField(fieldId, candidate));
+      if (reasonParts.length) {
+        const combinedReason = reasonParts.reduce(
+          (acc, candidate) => combineKycReasonParts(acc, candidate),
+          recovered[field?.reasonResponseId] || "",
+        );
+        const sanitized = sanitizeKycReasonForField(fieldId, combinedReason);
+        if (sanitized) {
+          recovered[fieldId] = "Yes";
+          recovered[field.reasonResponseId] = sanitized;
+        }
       }
     }
   }
@@ -3554,16 +3858,26 @@ const isCompleteKycPhoneFieldValue = (field, value) => {
   return digits.length >= 10;
 };
 
+const isCompleteKycNameFieldValue = (field, value) => {
+  if (!isFullNameField(field)) return true;
+  if (isUncapturedKycValue(value)) return true;
+  return looksLikeValidKycName(value);
+};
+
 const isKycFieldComplete = (field, responses = {}) => {
   if (shouldSkipFieldForGender(field, responses)) return true;
   if (!hasRecordedKycValue(responses[field.id])) return false;
 
   if (!isCompleteKycDateFieldValue(field, responses[field.id])) return false;
   if (!isCompleteKycPhoneFieldValue(field, responses[field.id])) return false;
+  if (!isCompleteKycNameFieldValue(field, responses[field.id])) return false;
 
   if (!field?.requiresReasonOnYes) return true;
   if (responses[field.id] !== 'Yes') return true;
-  return hasRecordedKycValue(responses[field.reasonResponseId]);
+  if (!hasRecordedKycValue(responses[field.reasonResponseId])) return false;
+  if (isUncapturedKycValue(responses[field.reasonResponseId])) return true;
+  if (field.id === "travel_outside_india") return true;
+  return hasDurationPhrase(responses[field.reasonResponseId]);
 };
 
 
@@ -3683,6 +3997,9 @@ const isLikelyFiller = (text, field) => {
 };
 
 const AMBIENT_TRANSCRIPT_PATTERNS = [
+  /\bthe ai\b/i,
+  /\bai driven\b/i,
+  /\blegal\b/i,
   /\bwhat i look (at|like) that\b/i,
   /\blook at that\b/i,
   /\bcan you see (this|that|me)\b/i,
@@ -3721,7 +4038,7 @@ const hasHabitKeyword = (text) =>
 
 const cleanHabitAnswerForPdf = (value) => {
   const raw = extractReasonFromAffirmativeAnswer(value)
-    .replace(/(?:\b(?:for|since|from|past)\s*)+$/i, "")
+    .replace(/(?:\b(?:for|since|from|past|and|or|with|plus)\s*)+$/i, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!raw) return "";
@@ -3731,7 +4048,7 @@ const cleanHabitAnswerForPdf = (value) => {
 };
 
 const isIncompleteHabitPhrase = (value) =>
-  /\b(?:for|since|from|past)\s*$/i.test(
+  /\b(?:for|since|from|past|and|or|with|plus)\s*$/i.test(
     normalizeIndicSpeechText(value)
       .replace(/[.,!?]+$/g, "")
       .trim(),
@@ -3768,6 +4085,38 @@ const looksLikeCompleteFullName = (value) => {
   return tokens.every((token) => token.replace(/[^a-z'.-]/gi, "").length >= 2);
 };
 
+const KYC_BAD_NAME_VALUES = new Set([
+  "mail",
+  "male",
+  "female",
+  "other",
+  "yes",
+  "no",
+  "so",
+  "so do",
+  "do",
+  "the",
+  "the dish",
+  "dish",
+  "tatish",
+  "what",
+  "right",
+  "okay",
+  "ok",
+]);
+
+const looksLikeValidKycName = (value) => {
+  const formatted = formatNameForPdf(value);
+  const normalized = normalize(formatted);
+  if (!formatted || KYC_BAD_NAME_VALUES.has(normalized)) return false;
+  if (isUnsafeKycPdfText(formatted) || isLikelyNumberOnlySpeech(formatted)) return false;
+  if (!looksLikeCompleteFullName(formatted)) return false;
+
+  const letters = formatted.replace(/[^a-z]/gi, "");
+  if (letters.length < 6) return false;
+  return true;
+};
+
 const isLikelyNumberOnlySpeech = (value) => {
   const normalized = normalizeIndicSpeechText(value)
     .toLowerCase()
@@ -3800,6 +4149,30 @@ const isLikelyNumberOnlySpeech = (value) => {
   return tokens.length > 0 && tokens.every((token) => allowed.has(token) || /^\d+$/.test(token));
 };
 
+const isNumericKycField = (field) =>
+  field?.type === "number" ||
+  ["height_cm", "weight_kg", "all_life_cover", "all_ci_cover"].includes(
+    String(field?.id || ""),
+  );
+
+const isPlausibleNumericKycValue = (field, value) => {
+  const formatted = formatKycAnswerForPdf(field, value);
+  if (!/^\d+(\.\d+)?$/.test(String(formatted || "").trim())) return false;
+  const numeric = Number(formatted);
+  if (!Number.isFinite(numeric)) return false;
+  if (field?.id === "height_cm") return numeric >= 100 && numeric <= 250;
+  if (field?.id === "weight_kg") return numeric >= 20 && numeric <= 250;
+  if (field?.id === "all_life_cover" || field?.id === "all_ci_cover") {
+    const normalized = normalizeIndicSpeechText(value).toLowerCase();
+    if (numeric === 0) return true;
+    return (
+      numeric >= 1000 ||
+      /\b(lakhs?|lacs?|crores?|million|thousand)\b/i.test(normalized)
+    );
+  }
+  return true;
+};
+
 const isLocallyPlausibleKycAnswerForField = (field, rawText, formattedValue = null) => {
   const raw = normalizeTranscriptEncoding(rawText);
   if (!field || !raw) return false;
@@ -3812,12 +4185,12 @@ const isLocallyPlausibleKycAnswerForField = (field, rawText, formattedValue = nu
 
   if (normalizedFieldId === "application_no" || String(field.label || "").toLowerCase().includes("application")) {
     const digits = String(formatted || "").replace(/\D/g, "");
-    return digits.length >= 2 && !/[a-z]{3,}/i.test(String(formatted || "").replace(/\b(one|two|three|four|five|six|seven|eight|nine|zero|oh|o)\b/gi, ""));
+    return digits.length >= 5 && !/[a-z]{3,}/i.test(String(formatted || "").replace(/\b(one|two|three|four|five|six|seven|eight|nine|zero|oh|o)\b/gi, ""));
   }
 
   if (isFullNameField(field)) {
     if (isLikelyNumberOnlySpeech(raw)) return false;
-    return /[a-z\u0900-\u097F]/i.test(raw);
+    return looksLikeValidKycName(formatted || raw);
   }
 
   if (field.type === "date") {
@@ -3836,6 +4209,11 @@ const isLocallyPlausibleKycAnswerForField = (field, rawText, formattedValue = nu
 
   if (isPhoneKycField(field)) {
     return getPhoneDigitsForKyc(formatted || raw).length > 0;
+  }
+
+  if (isNumericKycField(field)) {
+    if (parseYesNoAnswer(raw)) return false;
+    return isPlausibleNumericKycValue(field, formatted || raw);
   }
 
   if (isYesNoField(field)) {
@@ -3872,6 +4250,7 @@ const getAgentClarificationMode = (text) => {
     /\b(is that (correct|right)|did i (get|hear) that right|did i hear you correctly|is this correct|so that'?s .* correct)\b/i.test(
       normalized,
     ) ||
+    /\b(?:correct|right)\?\s*$/i.test(normalized) ||
     /\bi heard .* is that correct\b/i.test(normalized) ||
     /\b(do you mean|did you mean|you mean|i think you meant)\b/i.test(
       normalized,
@@ -3908,6 +4287,10 @@ const inferConfirmedClarificationAnswer = (field, clarificationText) => {
     if (/\bmale\b|\bman\b|\bboy\b/.test(normalized)) return "Male";
     if (/\bother\b|\bnon binary\b/.test(normalized)) return "Other";
   }
+  if (field.type === "date") {
+    const date = formatDateOfBirthForPdf(clarificationText);
+    if (isReasonableKycDateValue(date)) return date;
+  }
 
   return "";
 };
@@ -3915,7 +4298,7 @@ const inferConfirmedClarificationAnswer = (field, clarificationText) => {
 const isReasonFollowUpText = (text) => {
   const normalized = normalize(text);
   if (!normalized) return false;
-  return /\b(reason|details|brief details|what happened|why|name of medicine|provide details|tell me the reason)\b/i.test(
+  return /\b(reason|details|brief details|what happened|why|name of medicine|provide details|tell me the reason|which one|which condition|which procedure|which country|country name again|share what tests|which test|tell me more about|share which country|clarify the country|share what treatment|share what medication)\b/i.test(
     normalized,
   );
 };
@@ -4092,10 +4475,33 @@ const resolveAgentAskedFieldIndex = (
   lastCommitted,
 ) => {
   if (!Array.isArray(fields) || !fields.length) return -1;
+  const transcriptPromptFieldId = getTranscriptPromptFieldId(text);
+  if (transcriptPromptFieldId) {
+    const exactIndex = fields.findIndex((field) => field.id === transcriptPromptFieldId);
+    if (exactIndex >= 0) return exactIndex;
+  }
+
   if (!isLikelyAgentQuestionText(text, getAgentClarificationMode(text)))
     return -1;
 
   const fallbackField = fields[fallbackIndex];
+  const normalizedQuestion = normalize(text);
+  if (
+    !transcriptPromptFieldId &&
+    /^(could you\s+)?(?:please\s+)?(?:clarify|specify)\s+which\b/.test(normalizedQuestion) &&
+    !/\b(kidney|liver|stomach|condition|disease|test|surgery|procedure|country|medicine|medication|treatment|positive|hiv|aids)\b/.test(
+      normalizedQuestion,
+    )
+  ) {
+    return fallbackField && isKycFieldAwaitingReason(fallbackField, responses)
+      ? fallbackIndex
+      : -1;
+  }
+  if (transcriptPromptFieldId) {
+    const exactIndex = fields.findIndex((field) => field.id === transcriptPromptFieldId);
+    if (exactIndex >= 0 && exactIndex !== fallbackIndex) return exactIndex;
+  }
+
   if (
     fallbackField &&
     isKycFieldAwaitingReason(fallbackField, responses) &&
@@ -4118,7 +4524,6 @@ const resolveAgentAskedFieldIndex = (
     }
   }
 
-  const transcriptPromptFieldId = getTranscriptPromptFieldId(text);
   if (transcriptPromptFieldId) {
     const exactIndex = fields.findIndex((field) => field.id === transcriptPromptFieldId);
     if (exactIndex >= 0) return exactIndex;
@@ -4186,7 +4591,8 @@ const finalizeIncompleteKycResponses = (fields = [], responses = {}) => {
     if (
       !hasRecordedKycValue(updated[field.id]) ||
       !isCompleteKycDateFieldValue(field, updated[field.id]) ||
-      !isCompleteKycPhoneFieldValue(field, updated[field.id])
+      !isCompleteKycPhoneFieldValue(field, updated[field.id]) ||
+      !isCompleteKycNameFieldValue(field, updated[field.id])
     ) {
       updated[field.id] = KYC_UNCAPTURED_VALUE;
       changed = true;
@@ -4225,6 +4631,13 @@ const markSkippedFieldsAsUncaptured = (
   }
 
   return { responses: updated, changed };
+};
+
+const shouldHoldIncompleteFieldBeforeAgentJump = (field, responses = {}) => {
+  if (!field || shouldSkipFieldForGender(field, responses)) return false;
+  if (isKycFieldComplete(field, responses)) return false;
+
+  return false;
 };
 
 const getActiveKycPromptLabel = (field, responses = {}) => {
@@ -4877,7 +5290,11 @@ const fillAcroFieldWithAnswer = (field, answer, fieldType = "text") => {
     }
 
     if (typeof field.setText === "function") {
-      field.setText(value);
+      const fittedValue = fitTextForAcroField(field, value);
+      field.setText(fittedValue);
+      if (typeof field.setFontSize === "function") {
+        field.setFontSize(fittedValue.length > 18 ? 7 : 8);
+      }
       return true;
     }
 
@@ -4975,58 +5392,100 @@ const getPdfBoxFontSize = (value, fallback = 8) => {
   return fallback;
 };
 
+const getPdfTextWidth = (font, value, fontSize) => {
+  try {
+    return font ? font.widthOfTextAtSize(value, fontSize) : String(value || "").length * fontSize * 0.5;
+  } catch {
+    return String(value || "").length * fontSize * 0.5;
+  }
+};
+
+const wrapPdfTextToBox = (value, font, fontSize, width, height, minFontSize = 3.2) => {
+  const safe = toPdfSafeText(value, KYC_UNCAPTURED_LABEL)
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!safe) return { lines: [], fontSize };
+
+  const boxWidth = Math.max(6, Number(width || 40));
+  const boxHeight = Math.max(6, Number(height || 12));
+  let size = Number(fontSize || 8);
+  let bestLines = [];
+
+  while (size >= minFontSize) {
+    const lineHeight = size + 0.45;
+    const maxLines = Math.max(1, Math.floor(boxHeight / lineHeight));
+    const words = safe.split(/\s+/).filter(Boolean);
+    const lines = [];
+    let line = "";
+    let consumed = 0;
+
+    const trimToWidth = (word, suffix = "") => {
+      let next = String(word || "").trim();
+      while (next && getPdfTextWidth(font, `${next}${suffix}`, size) > boxWidth) {
+        next = next.slice(0, -1).trimEnd();
+      }
+      return next ? `${next}${suffix}` : "";
+    };
+
+    for (const word of words) {
+      const next = line ? `${line} ${word}` : word;
+      if (getPdfTextWidth(font, next, size) <= boxWidth) {
+        line = next;
+        consumed += 1;
+        continue;
+      }
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      if (lines.length >= maxLines) break;
+      line = getPdfTextWidth(font, word, size) <= boxWidth
+        ? word
+        : trimToWidth(word);
+      consumed += 1;
+    }
+
+    if (line && lines.length < maxLines) lines.push(line);
+    bestLines = lines;
+
+    if (consumed >= words.length && lines.length <= maxLines) {
+      return { lines, fontSize: size };
+    }
+    size -= 0.35;
+  }
+
+  if (bestLines.length) {
+    const last = bestLines.length - 1;
+    let shortened = bestLines[last];
+    while (
+      shortened &&
+      getPdfTextWidth(font, `${shortened}...`, Math.max(minFontSize, size)) > boxWidth
+    ) {
+      shortened = shortened.slice(0, -1).trimEnd();
+    }
+    bestLines[last] = shortened ? `${shortened}...` : bestLines[last];
+  }
+
+  return { lines: bestLines, fontSize: minFontSize };
+};
+
 const drawTinyReasonText = (page, font, text, x, y, width, height) => {
-  const safe = toPdfSafeText(text);
-  if (!safe) return;
-  const textLength = safe.replace(/\s+/g, " ").trim().length;
-  const fontSize =
-    textLength <= 12 ? 5.4 :
-    textLength <= 22 ? 4.5 :
-    textLength <= 36 ? 3.8 :
-    3.2;
-  const lineHeight = fontSize + 0.35;
+  const textLength = String(text || "").replace(/\s+/g, " ").trim().length;
+  const baseFontSize =
+    textLength <= 12 ? 5.8 :
+    textLength <= 22 ? 5.0 :
+    textLength <= 36 ? 4.2 :
+    3.4;
+  const { lines, fontSize } = wrapPdfTextToBox(
+    text,
+    font,
+    baseFontSize,
+    width,
+    height,
+    2.8,
+  );
+  const lineHeight = fontSize + 0.25;
   const maxLines = Math.max(1, Math.floor(Number(height || 12) / lineHeight));
-  const boxWidth = Math.max(8, Number(width || 42));
-  const textWidth = (value) => {
-    try {
-      return font.widthOfTextAtSize(value, fontSize);
-    } catch {
-      return String(value || "").length * fontSize * 0.5;
-    }
-  };
-  const trimToWidth = (value, suffix = "") => {
-    let next = String(value || "").trim();
-    while (next && textWidth(`${next}${suffix}`) > boxWidth) {
-      next = next.slice(0, -1).trimEnd();
-    }
-    return next ? `${next}${suffix}` : "";
-  };
-  const words = safe.split(/\s+/).filter(Boolean);
-  const lines = [];
-  let line = "";
-  let consumedWords = 0;
-
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (textWidth(next) <= boxWidth) {
-      line = next;
-      consumedWords += 1;
-      continue;
-    }
-    if (line) {
-      lines.push(line);
-      line = "";
-    }
-    if (lines.length >= maxLines) break;
-    line = textWidth(word) <= boxWidth ? word : trimToWidth(word);
-    consumedWords += 1;
-  }
-  if (line && lines.length < maxLines) lines.push(line);
-
-  const hasHiddenText = consumedWords < words.length;
-  if (hasHiddenText && lines.length) {
-    lines[lines.length - 1] = trimToWidth(lines[lines.length - 1], "...");
-  }
 
   lines.slice(0, maxLines).forEach((lineText, index) => {
     if (!lineText) return;
@@ -5043,7 +5502,7 @@ const drawTinyReasonText = (page, font, text, x, y, width, height) => {
 const getReasonDrawBox = (scaled, pageHeight) => {
   const rawWidth = Number(scaled.reasonWidth || 40);
   const rawHeight = Number(scaled.reasonHeight || 14);
-  const inset = 3;
+  const inset = 3.6;
   const x = Math.max(0, Number(scaled.reasonX || 0) + inset);
   const y =
     pageHeight -
@@ -5057,20 +5516,26 @@ const getReasonDrawBox = (scaled, pageHeight) => {
 };
 
 const drawMappedPdfText = (page, font, value, scaled, pageHeight) => {
-  const text = fitTextForPdfBox(
+  const fittedText = fitTextForPdfBox(
     value,
     scaled.width || 200,
     scaled.height || 14,
     font,
     scaled.fontSize || 9,
   );
-  if (!text) return;
+  const { lines, fontSize } = wrapPdfTextToBox(
+    fittedText,
+    font,
+    scaled.fontSize || 9,
+    scaled.width || 200,
+    scaled.height || 14,
+    3.2,
+  );
+  if (!lines.length) return;
   const x = Number(scaled.inputX || 0);
-  const height = Number(scaled.height || 14);
-  const fontSize = scaled.fontSize || 9;
   const lineHeight = fontSize + 0.45;
   const topY = pageHeight - Number(scaled.inputY || 0);
-  text.split("\n").forEach((lineText, index) => {
+  lines.forEach((lineText, index) => {
     page.drawText(toPdfSafeText(lineText, KYC_UNCAPTURED_LABEL), {
       x,
       y: topY - fontSize - 1 - index * lineHeight,
@@ -5079,6 +5544,11 @@ const drawMappedPdfText = (page, font, value, scaled, pageHeight) => {
       color: rgb(0.02, 0.03, 0.04),
     });
   });
+};
+
+const drawPresetPageTwoLabelFixes = (pages, font) => {
+  const page = pages?.[1];
+  if (!page) return;
 };
 
 const setTextAcroFieldValue = (field, value = "") => {
@@ -6104,6 +6574,7 @@ const CarelyAIAssistant = () => {
 
   const currentAudioRef = useRef(null);
   const currentAudioUrlRef = useRef(null);
+  const pendingRecordingDownloadRef = useRef(null);
   const kycTurnLockRef = useRef(false);
   const lastAnswerTimestampRef = useRef(0);
   const ANSWER_COOLDOWN_MS = 1800;  
@@ -6116,6 +6587,8 @@ const CarelyAIAssistant = () => {
   const agentTranscriptTurnRef = useRef(0);
   const pendingClarificationTargetRef = useRef(null);
   const pendingReasonFieldRef = useRef(null);
+  const pendingNameSpellingRef = useRef(null);
+  const recentReasonCarryoverRef = useRef(null);
   const ignoredAgentFollowUpRef = useRef(null);
   const transcriptHandlerRefs = useRef({ onUser: null, onAgent: null });
   const processedTranscriptKeysRef = useRef(new Set());
@@ -6132,7 +6605,10 @@ const CarelyAIAssistant = () => {
   const callAudioChunksRef = useRef([]);
   const callVideoChunksRef = useRef([]);
   const callRecordingAudioContextRef = useRef(null);
+  const callRecordingDestinationRef = useRef(null);
   const callRecordingSourcesRef = useRef([]);
+  const callRecordingTrackIdsRef = useRef(new Set());
+  const callRecordingConnectTrackRef = useRef(null);
   const callRecordingCanvasRef = useRef(null);
   const callRecordingAnimationRef = useRef(null);
 
@@ -6204,6 +6680,193 @@ const CarelyAIAssistant = () => {
     return canvas.toDataURL("image/jpeg", 0.88);
   };
 
+  const getCanvasFromVideoElement = (video) => {
+    if (!video || !video.videoWidth || !video.videoHeight) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  };
+
+  const analyzeCallCaptureCanvas = (canvas) => {
+    const width = canvas.width;
+    const height = canvas.height;
+    const sampleWidth = 120;
+    const sampleHeight = Math.max(1, Math.round((height / width) * sampleWidth));
+    const sampleCanvas = document.createElement("canvas");
+    sampleCanvas.width = sampleWidth;
+    sampleCanvas.height = sampleHeight;
+    const sampleCtx = sampleCanvas.getContext("2d", { willReadFrequently: true });
+    sampleCtx.drawImage(canvas, 0, 0, sampleWidth, sampleHeight);
+    const pixels = sampleCtx.getImageData(0, 0, sampleWidth, sampleHeight).data;
+    const lumas = [];
+    let brightness = 0;
+    let contrast = 0;
+    let sharpness = 0;
+    let glarePixels = 0;
+    let count = 0;
+
+    for (let i = 0; i < pixels.length; i += 4) {
+      const luma = pixels[i] * 0.299 + pixels[i + 1] * 0.587 + pixels[i + 2] * 0.114;
+      lumas.push(luma);
+      brightness += luma;
+      if (luma > 245) glarePixels += 1;
+      count += 1;
+    }
+
+    brightness /= count || 1;
+    for (let y = 1; y < sampleHeight; y += 1) {
+      for (let x = 1; x < sampleWidth; x += 1) {
+        const index = y * sampleWidth + x;
+        sharpness += Math.abs(lumas[index] - lumas[index - 1]);
+        sharpness += Math.abs(lumas[index] - lumas[index - sampleWidth]);
+        contrast += Math.abs(lumas[index] - brightness);
+      }
+    }
+
+    const comparablePixels = Math.max(1, (sampleWidth - 1) * (sampleHeight - 1));
+    return {
+      width,
+      height,
+      brightness,
+      contrast: contrast / comparablePixels,
+      sharpness: sharpness / comparablePixels,
+      glareRatio: glarePixels / Math.max(1, count),
+      pixels,
+      sampleWidth,
+      sampleHeight,
+    };
+  };
+
+  const getCallForegroundBounds = ({ pixels, sampleWidth, sampleHeight }) => {
+    const cornerPoints = [
+      [3, 3],
+      [sampleWidth - 4, 3],
+      [3, sampleHeight - 4],
+      [sampleWidth - 4, sampleHeight - 4],
+    ];
+    const cornerLumas = cornerPoints.map(([x, y]) => {
+      const index = (y * sampleWidth + x) * 4;
+      return pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114;
+    });
+    const background = cornerLumas.reduce((sum, value) => sum + value, 0) / cornerLumas.length;
+    let minX = sampleWidth;
+    let minY = sampleHeight;
+    let maxX = 0;
+    let maxY = 0;
+    let count = 0;
+
+    for (let y = 0; y < sampleHeight; y += 1) {
+      for (let x = 0; x < sampleWidth; x += 1) {
+        const index = (y * sampleWidth + x) * 4;
+        const luma = pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114;
+        if (Math.abs(luma - background) < 20) continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        count += 1;
+      }
+    }
+
+    if (!count) return null;
+    return {
+      xRatio: minX / sampleWidth,
+      yRatio: minY / sampleHeight,
+      widthRatio: (maxX - minX + 1) / sampleWidth,
+      heightRatio: (maxY - minY + 1) / sampleHeight,
+      coverageRatio: count / (sampleWidth * sampleHeight),
+    };
+  };
+
+  const getCallCenterBodyPresence = ({ pixels, sampleWidth, sampleHeight }) => {
+    const leftX = Math.floor(sampleWidth * 0.08);
+    const rightX = Math.floor(sampleWidth * 0.92);
+    let background = 0;
+    let backgroundCount = 0;
+    for (let y = 0; y < sampleHeight; y += 2) {
+      [leftX, rightX].forEach((x) => {
+        const index = (y * sampleWidth + x) * 4;
+        background += pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114;
+        backgroundCount += 1;
+      });
+    }
+    background /= Math.max(1, backgroundCount);
+
+    const centerMinX = Math.floor(sampleWidth * 0.3);
+    const centerMaxX = Math.ceil(sampleWidth * 0.7);
+    const bands = [
+      [0.12, 0.34],
+      [0.34, 0.62],
+      [0.62, 0.86],
+      [0.84, 0.99],
+    ];
+
+    return bands.map(([from, to]) => {
+      const startY = Math.floor(sampleHeight * from);
+      const endY = Math.ceil(sampleHeight * to);
+      let foreground = 0;
+      let total = 0;
+      for (let y = startY; y < endY; y += 1) {
+        for (let x = centerMinX; x < centerMaxX; x += 1) {
+          const index = (y * sampleWidth + x) * 4;
+          const luma = pixels[index] * 0.299 + pixels[index + 1] * 0.587 + pixels[index + 2] * 0.114;
+          if (Math.abs(luma - background) > 22) foreground += 1;
+          total += 1;
+        }
+      }
+      return foreground / Math.max(1, total);
+    });
+  };
+
+  const validateCallCaptureFrame = (stage, canvas) => {
+    const metrics = analyzeCallCaptureCanvas(canvas);
+    if (metrics.width < 640 || metrics.height < 360) {
+      return "Camera quality is too low. Please move closer to the camera or switch camera.";
+    }
+    if (metrics.brightness < 42) return "Too dark. Please add light before capture.";
+    if (metrics.brightness > 238) return "Too bright. Please reduce glare before capture.";
+    if (metrics.glareRatio > 0.1) return "Glare detected. Tilt slightly and hold steady.";
+
+    const minimumSharpness = stage === "id" ? 8.5 : 3.5;
+    const minimumContrast = stage === "id" ? 14 : 6;
+    if (metrics.sharpness < minimumSharpness || metrics.contrast < minimumContrast) {
+      return "Image is not clear enough. Hold steady and keep the subject in focus.";
+    }
+
+    const bounds = getCallForegroundBounds(metrics);
+    if (stage === "id") {
+      if (!bounds || bounds.coverageRatio < 0.035 || bounds.widthRatio < 0.25 || bounds.heightRatio < 0.12) {
+        return "Show the ID card clearly in front of the camera.";
+      }
+      const aspectRatio = bounds.widthRatio / Math.max(0.01, bounds.heightRatio);
+      if (aspectRatio < 1.05 || aspectRatio > 2.4) {
+        return "Keep the ID card straight and fully visible.";
+      }
+      if (bounds.yRatio > 0.62 || bounds.yRatio + bounds.heightRatio < 0.28) {
+        return "Bring the ID card into the center of the frame.";
+      }
+      return "";
+    }
+
+    if (stage === "fullBody") {
+      if (!bounds || bounds.coverageRatio < 0.018) {
+        return "Stand fully inside the frame before capture.";
+      }
+      if (bounds.heightRatio < 0.45 || bounds.yRatio > 0.32 || bounds.yRatio + bounds.heightRatio < 0.82) {
+        return "Head-to-toe is not fully visible. Step back until feet are visible.";
+      }
+      const [upper, middle, lower, feet] = getCallCenterBodyPresence(metrics);
+      if (upper < 0.018 || middle < 0.025 || lower < 0.018 || feet < 0.01) {
+        return "Stand centered with head and feet visible.";
+      }
+    }
+
+    return "";
+  };
+
   const calculateVideoMotionScore = (video) => {
     if (!video || !video.videoWidth || !video.videoHeight) return 0;
     const sampleSize = 64;
@@ -6234,12 +6897,12 @@ const CarelyAIAssistant = () => {
     kycImageCaptureStageStartedAtRef.current = Date.now();
     const instructionEnglish =
       stage === "id"
-        ? "Please show your PAN or Aadhaar card to the camera. Keep the full card readable and hold it steady until it is captured."
-        : "Please step back from the camera so your full body is visible from head to toe. Stand still until it is captured.";
+        ? "ID capture is starting. Please show your PAN or Aadhaar card to the camera. Keep the full card readable and hold it steady until it is captured."
+        : "Head-to-toe capture is starting. Please step back from the camera so your full body is visible from head to toe. Stand still until it is captured.";
     setAutoCaptureStatus(
       stage === "id"
-        ? "Show the PAN or Aadhaar card to the in-call camera. Capture will happen automatically when it is steady."
-        : "Step back so your full body is visible. Capture will happen automatically when the frame is steady.",
+        ? "Get ready: show the PAN or Aadhaar card now. Auto-capture starts after a short hold."
+        : "Get ready: step back now. Auto-capture starts after a short hold.",
     );
     localizeKycText(instructionEnglish, preferredLanguage)
       .then((instruction) => {
@@ -6274,15 +6937,34 @@ const CarelyAIAssistant = () => {
   const tryAutoCaptureCallImages = (reason = "auto") => {
     const video = userVideoRef.current;
     if (!video || !video.videoWidth || kycImageCaptureStage === "idle") return false;
-    if (Date.now() - kycImageCaptureStageStartedAtRef.current < 2500) return false;
-    const dataUrl = captureDataUrlFromVideoElement(video);
+    const elapsed = Date.now() - kycImageCaptureStageStartedAtRef.current;
+    const prepareMs = kycImageCaptureStage === "id" ? 5500 : 6500;
+    if (elapsed < prepareMs) {
+      const secondsLeft = Math.max(1, Math.ceil((prepareMs - elapsed) / 1000));
+      setAutoCaptureStatus(
+        kycImageCaptureStage === "id"
+          ? `Prepare ID card. Checking frame in ${secondsLeft}s.`
+          : `Prepare head-to-toe pose. Checking frame in ${secondsLeft}s.`,
+      );
+      return false;
+    }
+
+    const canvas = getCanvasFromVideoElement(video);
+    if (!canvas) return false;
+    const qualityMessage = validateCallCaptureFrame(kycImageCaptureStage, canvas);
+    if (qualityMessage) {
+      setAutoCaptureStatus(qualityMessage);
+      return false;
+    }
+
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
     if (!dataUrl) return false;
 
     if (kycImageCaptureStage === "id") {
       setIdDocumentPhoto(dataUrl);
       setIdCaptureComplete(true);
-      setAutoCaptureStatus(`ID snapshot captured from BP call camera (${reason}).`);
-      window.setTimeout(() => startKycImageCaptureStage("fullBody"), 900);
+      setAutoCaptureStatus(`Clear ID snapshot captured (${reason}).`);
+      window.setTimeout(() => startKycImageCaptureStage("fullBody"), 1400);
       return true;
     }
 
@@ -6290,7 +6972,7 @@ const CarelyAIAssistant = () => {
       setFullBodyPhoto(dataUrl);
       setFullBodyCaptureComplete(true);
       setKycImageCaptureStage("done");
-      setAutoCaptureStatus(`Head-to-toe snapshot captured from BP call camera (${reason}).`);
+      setAutoCaptureStatus(`Clear head-to-toe snapshot captured (${reason}).`);
       return true;
     }
 
@@ -6454,6 +7136,9 @@ const CarelyAIAssistant = () => {
       }
     });
     callRecordingSourcesRef.current = [];
+    callRecordingTrackIdsRef.current = new Set();
+    callRecordingDestinationRef.current = null;
+    callRecordingConnectTrackRef.current = null;
     callAudioChunksRef.current = [];
     callVideoChunksRef.current = [];
 
@@ -6577,18 +7262,28 @@ const CarelyAIAssistant = () => {
       const audioCtx = new AudioContextCtor();
       const dest = audioCtx.createMediaStreamDestination();
       callRecordingAudioContextRef.current = audioCtx;
+      callRecordingDestinationRef.current = dest;
       callRecordingSourcesRef.current = [];
+      callRecordingTrackIdsRef.current = new Set();
 
       const connectAudioTracks = (tracks = []) => {
         tracks.forEach((track) => {
-          if (!track) return;
+          if (!track || track.readyState === "ended") return;
+          if (track.kind && track.kind !== "audio") return;
+          const trackKey =
+            track.id || `${track.kind || "audio"}_${track.label || "unknown"}`;
+          if (trackKey && callRecordingTrackIdsRef.current.has(trackKey)) return;
+          const stream = new MediaStream([track]);
+          if (!stream.getAudioTracks().length) return;
           const source = audioCtx.createMediaStreamSource(
-            new MediaStream([track]),
+            stream,
           );
           source.connect(dest);
           callRecordingSourcesRef.current.push(source);
+          if (trackKey) callRecordingTrackIdsRef.current.add(trackKey);
         });
       };
+      callRecordingConnectTrackRef.current = (track) => connectAudioTracks([track]);
 
       document.querySelectorAll("audio, video").forEach((el) => {
         const tracks = el.srcObject?.getAudioTracks?.() || [];
@@ -6602,9 +7297,29 @@ const CarelyAIAssistant = () => {
         room?.localParticipant?.audioTrackPublications?.values?.();
       if (localAudioTrackPublications) {
         for (const pub of localAudioTrackPublications) {
-          const mediaTrack = pub.track?.mediaStreamTrack;
+          const mediaTrack =
+            pub.audioTrack?.mediaStreamTrack ||
+            pub.track?.mediaStreamTrack;
           if (mediaTrack) {
             connectAudioTracks([mediaTrack]);
+          }
+        }
+      }
+
+      const remoteParticipants = room?.remoteParticipants?.values?.();
+      if (remoteParticipants) {
+        for (const participant of remoteParticipants) {
+          const publications =
+            participant?.audioTrackPublications?.values?.() ||
+            participant?.trackPublications?.values?.();
+          if (!publications) continue;
+          for (const pub of publications) {
+            const mediaTrack =
+              pub.audioTrack?.mediaStreamTrack ||
+              pub.track?.mediaStreamTrack;
+            if (mediaTrack) {
+              connectAudioTracks([mediaTrack]);
+            }
           }
         }
       }
@@ -6800,18 +7515,50 @@ const CarelyAIAssistant = () => {
   };
 
   const downloadCallAudioRecording = () => {
+    if (callRecordingBlob) {
+      downloadBlob(
+        callRecordingBlob,
+        `call_audio_${new Date().toISOString().split("T")[0]}.webm`,
+      );
+      return;
+    }
+    if (isRecordingCall) {
+      pendingRecordingDownloadRef.current = "audio";
+      stopCallRecording({ discard: false });
+    }
+  };
+
+  const downloadCallVideoRecording = () => {
+    if (callVideoRecordingBlob) {
+      downloadBlob(
+        callVideoRecordingBlob,
+        `call_video_${new Date().toISOString().split("T")[0]}.webm`,
+      );
+      return;
+    }
+    if (isRecordingCall) {
+      pendingRecordingDownloadRef.current = "video";
+      stopCallRecording({ discard: false });
+    }
+  };
+
+  useEffect(() => {
+    if (pendingRecordingDownloadRef.current !== "audio" || !callRecordingBlob) return;
+    pendingRecordingDownloadRef.current = null;
     downloadBlob(
       callRecordingBlob,
       `call_audio_${new Date().toISOString().split("T")[0]}.webm`,
     );
-  };
+  }, [callRecordingBlob]);
 
-  const downloadCallVideoRecording = () => {
+  useEffect(() => {
+    if (pendingRecordingDownloadRef.current !== "video" || !callVideoRecordingBlob) return;
+    pendingRecordingDownloadRef.current = null;
     downloadBlob(
       callVideoRecordingBlob,
       `call_video_${new Date().toISOString().split("T")[0]}.webm`,
     );
-  };
+  }, [callVideoRecordingBlob]);
 
   const prefillFromPanOcr = (ocrData) => {
     if (!ocrData) return;
@@ -6906,8 +7653,47 @@ const CarelyAIAssistant = () => {
     return true;
   };
 
+  const ensureKycTranscriptQuestionForField = async (
+    field,
+    fieldIndex,
+    mode = "answer",
+    phase = "detail",
+  ) => {
+    if (!field || fieldIndex == null || fieldIndex < 0) return false;
+
+    const visibleMessages = kycChatMessages
+      .filter((msg) => !msg?.isHidden && !msg?.isSystem)
+      .slice(-8);
+    const hasRecentPrompt = visibleMessages.some((msg) => {
+      if (msg.role !== "assistant") return false;
+      return getTranscriptPromptFieldId(msg.content || msg.displayContent || "") === field.id;
+    });
+    if (hasRecentPrompt) return false;
+
+    const promptText =
+      mode === "reason"
+        ? getKycReasonFollowUpPrompt(
+            field,
+            phase,
+            pendingReasonFieldRef.current?.fieldId === field.id
+              ? pendingReasonFieldRef.current?.detail
+              : "",
+          )
+        : getActiveKycPromptLabel(field, kycResponsesRef.current) ||
+          field.prompt ||
+          field.label;
+    const cleanPrompt = stripInlineYesDetailInstruction(promptText);
+    if (!cleanPrompt) return false;
+
+    const displayPrompt = await localizeKycText(cleanPrompt, preferredLanguage, {
+      transcriptScript: true,
+    });
+    return recordKycTranscriptMessage("assistant", displayPrompt || cleanPrompt, {
+      eventKey: `synthetic_prompt_${field.id}_${mode}_${phase}`,
+    });
+  };
+
 const hideKycTranscriptMessage = (role, text, options = {}) => {
-    if (role === "user") return;
     const cleanText = normalizeTranscriptEncoding(text);
     if (!cleanText) return;
     const key = getTranscriptMessageKey(role, cleanText, options?.eventKey);
@@ -7040,9 +7826,7 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     const isReliableRealtimeTranscriptSource =
       transcriptSource.startsWith("beyondpresence") ||
       transcriptSource === "livekit_transcription_fallback";
-    const transcriptWasRecorded = isReliableRealtimeTranscriptSource
-      ? await recordKycTranscriptMessage("user", cleanText, options)
-      : false;
+    let transcriptWasRecorded = false;
     const now = Date.now();
     if (kycTurnLockRef.current || kycCompleteRef.current) return;
     const activeIndex = kycCurrentFieldIndexRef.current;
@@ -7050,13 +7834,58 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
 
     const currentResponses = kycResponsesRef.current;
     const pendingClarification = pendingClarificationTargetRef.current;
-    const pendingReason =
+    let pendingReason =
       pendingReasonFieldRef.current &&
       now - pendingReasonFieldRef.current.timestamp < 60000 &&
       kycFields[pendingReasonFieldRef.current.index] &&
       currentResponses[kycFields[pendingReasonFieldRef.current.index].id] === "Yes"
         ? pendingReasonFieldRef.current
         : null;
+    if (!pendingReason) {
+      const activeField = kycFields[activeIndex];
+      const activeReason = activeField?.reasonResponseId
+        ? currentResponses[activeField.reasonResponseId]
+        : "";
+      if (
+        activeField?.requiresReasonOnYes &&
+        currentResponses[activeField.id] === "Yes" &&
+        hasMeaningfulKycValue(activeReason) &&
+        activeField.id !== "travel_outside_india" &&
+        !hasDurationPhrase(activeReason)
+      ) {
+        pendingReason = {
+          index: activeIndex,
+          fieldId: activeField.id,
+          phase: "duration",
+          detail: activeReason,
+          timestamp: now,
+        };
+        pendingReasonFieldRef.current = pendingReason;
+      }
+    }
+    const recentReasonCarryover =
+      recentReasonCarryoverRef.current &&
+      now - recentReasonCarryoverRef.current.timestamp < 15000 &&
+      kycFields[recentReasonCarryoverRef.current.index] &&
+      currentResponses[kycFields[recentReasonCarryoverRef.current.index].id] === "Yes"
+        ? recentReasonCarryoverRef.current
+        : null;
+    if (
+      !pendingReason &&
+      recentReasonCarryover &&
+      hasMeaningfulKycValue(cleanText) &&
+      !isLikelyFiller(cleanText, kycFields[recentReasonCarryover.index]) &&
+      !isLikelyNonReasonAnswerForField(recentReasonCarryover.fieldId, cleanText)
+    ) {
+      pendingReason = {
+        ...recentReasonCarryover,
+        phase:
+          recentReasonCarryover.phase ||
+          (hasDurationPhrase(cleanText) ? "duration" : "detail"),
+        timestamp: now,
+      };
+      recentReasonCarryoverRef.current = null;
+    }
 
     if (kycSpeaking && !pendingReason && !options?.allowDuringAgentSpeech) {
       console.log("User transcript ignored while avatar is speaking:", cleanText);
@@ -7064,18 +7893,25 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     }
     if (
       !pendingReason &&
+      !(pendingClarification && now - pendingClarification.timestamp < 15000) &&
       ignoredAgentFollowUpRef.current &&
       now - ignoredAgentFollowUpRef.current.timestamp < 20000
     ) {
       const activeFieldForIgnore = kycFields[activeIndex];
-      if (activeFieldForIgnore?.type === "number") {
+      const activeFieldCanUseThisAnswer =
+        activeFieldForIgnore &&
+        (activeFieldForIgnore.type === "number" ||
+          isYesNoField(activeFieldForIgnore) ||
+          hasMeaningfulKycValue(
+            cleanRecoveredTranscriptAnswer(activeFieldForIgnore.id, cleanText),
+          ));
+      if (activeFieldCanUseThisAnswer) {
         ignoredAgentFollowUpRef.current = null;
       } else {
       console.log(
         "User transcript ignored for non-form agent follow-up:",
         cleanText,
       );
-      ignoredAgentFollowUpRef.current = null;
       return;
       }
     }
@@ -7099,6 +7935,7 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       ? pendingClarification.index
       : safeRecentAskedField?.index ?? activeIndex;
     if (
+      !pendingReason &&
       !hasFreshClarification &&
       kycFields[targetFieldIndex] &&
       isKycFieldComplete(kycFields[targetFieldIndex], currentResponses)
@@ -7118,7 +7955,13 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         : (hasFreshClarification ? pendingClarification.mode : null) ||
           (safeRecentAskedField?.index != null && safeRecentAskedField.index !== activeIndex ? 'followup' : 'answer');
 
-    const eventKey = getTranscriptMessageKey('user', cleanText, options?.eventKey);
+    const eventKey = options?.eventKey
+      ? getTranscriptMessageKey('user', cleanText, options.eventKey)
+      : getTranscriptMessageKey(
+          'user',
+          cleanText,
+          `${targetFieldIndex}:${answerMode}:${normalize(cleanText).slice(0, 120)}`
+        );
     const fingerprint = getTranscriptFingerprint(
       'user',
       cleanText,
@@ -7144,9 +7987,14 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     }
 
     console.log('User said:', cleanText);
-    if (!transcriptWasRecorded) {
-      await recordKycTranscriptMessage("user", cleanText, options);
-    }
+    const targetTranscriptField = kycFields[targetFieldIndex];
+    await ensureKycTranscriptQuestionForField(
+      targetTranscriptField,
+      targetFieldIndex,
+      pendingReason ? "reason" : answerMode,
+      pendingReason?.phase || "detail",
+    );
+    transcriptWasRecorded = await recordKycTranscriptMessage("user", cleanText, options);
 
     if (hasFreshClarification) {
       const targetField = kycFields[targetFieldIndex];
@@ -7206,11 +8054,38 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
 
         kycTurnLockRef.current = true;
         try {
-          const correctionText = combinePartialKycAnswerText(
-            targetField,
-            currentResponses[targetField.id],
-            cleanText,
-          );
+          const spelledFragment = isFullNameField(targetField)
+            ? getSpelledNameCompact(cleanText)
+            : "";
+          const activeSpelling =
+            spelledFragment &&
+            pendingNameSpellingRef.current?.index === targetFieldIndex &&
+            now - pendingNameSpellingRef.current.timestamp < 30000
+              ? pendingNameSpellingRef.current
+              : null;
+          let correctionText = activeSpelling
+            ? spelledFragment.startsWith(activeSpelling.value || "")
+              ? spelledFragment
+              : `${activeSpelling.value || ""}${spelledFragment}`
+            : combinePartialKycAnswerText(
+                targetField,
+                currentResponses[targetField.id],
+                cleanText,
+              );
+          if (activeSpelling && isFullNameField(targetField)) {
+            const compactCorrection = correctionText.replace(/[^a-z]/gi, "");
+            correctionText = splitCompactSpelledName(
+              compactCorrection,
+              currentResponses[targetField.id],
+            );
+          }
+          if (activeSpelling) {
+            pendingNameSpellingRef.current = {
+              ...activeSpelling,
+              value: correctionText.replace(/[^a-z]/gi, "").toLowerCase(),
+              timestamp: now,
+            };
+          }
           if (!isLocallyPlausibleKycAnswerForField(targetField, correctionText)) {
             console.log("Implausible correction ignored:", correctionText, targetField.id);
             return;
@@ -7301,6 +8176,9 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
           }
 
           pendingClarificationTargetRef.current = null;
+          if (isFullNameField(targetField)) {
+            pendingNameSpellingRef.current = null;
+          }
 
           const correctionNeedsReason =
             targetField.requiresReasonOnYes &&
@@ -7366,7 +8244,11 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         if (!isRelevantReason) {
           console.log("Irrelevant reason answer ignored:", cleanText, currentField.id);
           hideKycTranscriptMessage("user", cleanText, options);
-          await promptForPendingKycReason(currentField, pendingReason?.phase || "detail");
+          await promptForPendingKycReason(
+            currentField,
+            pendingReason?.phase || "detail",
+            pendingReason?.detail || "",
+          );
           return;
         }
 
@@ -7382,9 +8264,21 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
           currentField.id,
           normalizedReason,
         );
-        if (!hasMeaningfulKycValue(sanitizedReason)) {
+        const isDurationReasonPhase = (pendingReason?.phase || "detail") === "duration";
+        const durationReason = isDurationReasonPhase
+          ? sanitizeKycReasonDuration(reasonNormalized.englishText || cleanText)
+          : "";
+        const effectiveReason =
+          isDurationReasonPhase && hasMeaningfulKycValue(durationReason)
+            ? durationReason
+            : sanitizedReason;
+        if (!hasMeaningfulKycValue(effectiveReason)) {
           hideKycTranscriptMessage("user", cleanText, options);
-          await promptForPendingKycReason(currentField, pendingReason?.phase || "detail");
+          await promptForPendingKycReason(
+            currentField,
+            pendingReason?.phase || "detail",
+            pendingReason?.detail || "",
+          );
           return;
         }
 
@@ -7448,7 +8342,7 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
             timestamp: Date.now(),
           };
           const durationPrompt = await localizeKycText(
-            getKycReasonFollowUpPrompt(currentField, "duration"),
+            getKycReasonFollowUpPrompt(currentField, "duration", sanitizedReason),
             preferredLanguage,
           );
           setKycChatMessages((prev) => [
@@ -7673,7 +8567,7 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
           timestamp: Date.now(),
         };
         const followUpText = await localizeKycText(
-          getKycReasonFollowUpPrompt(currentField, nextPhase),
+          getKycReasonFollowUpPrompt(currentField, nextPhase, inlineReason),
           preferredLanguage,
         );
         setKycChatMessages((prev) => [
@@ -7705,14 +8599,38 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     const activeIndex = kycCurrentFieldIndexRef.current;
     const activeField = kycFieldsRef.current[activeIndex];
     const promptedFieldId = getTranscriptPromptFieldId(cleanText);
+    const promptedField = promptedFieldId
+      ? kycFieldsRef.current.find((field) => field.id === promptedFieldId)
+      : null;
+    if (promptedField && shouldSkipFieldForGender(promptedField, kycResponsesRef.current)) {
+      console.log("[KYC] Ignored gender-skipped prompt:", promptedField.id);
+      return;
+    }
     const activeFieldAwaitingReason =
       activeField &&
       (isKycFieldAwaitingReason(activeField, kycResponsesRef.current) ||
         (pendingReasonFieldRef.current?.index === activeIndex &&
           kycResponsesRef.current[activeField.id] === "Yes"));
     if (
+      activeFieldAwaitingReason &&
+      !pendingReasonFieldRef.current &&
+      activeField?.reasonResponseId &&
+      activeField.id !== "travel_outside_india" &&
+      hasMeaningfulKycValue(kycResponsesRef.current[activeField.reasonResponseId]) &&
+      !hasDurationPhrase(kycResponsesRef.current[activeField.reasonResponseId])
+    ) {
+      pendingReasonFieldRef.current = {
+        index: activeIndex,
+        fieldId: activeField.id,
+        phase: "duration",
+        detail: kycResponsesRef.current[activeField.reasonResponseId],
+        timestamp: now,
+      };
+    }
+    if (
       !activeFieldAwaitingReason &&
       isReasonFollowUpText(cleanText) &&
+      !promptedFieldId &&
       /\b(since how long|condition|reason|details?)\b/i.test(cleanText)
     ) {
       console.log("Stale reason follow-up ignored:", cleanText);
@@ -7729,7 +8647,20 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         lastCommitted,
       );
 
-      if (activeFieldAwaitingReason && isReasonFollowUpText(cleanText)) {
+      if (
+        matchedFieldIndex < 0 &&
+        activeField &&
+        !isKycFieldComplete(activeField, kycResponsesRef.current) &&
+        isLikelyCurrentYesNoFormPrompt(cleanText, activeField)
+      ) {
+        matchedFieldIndex = activeIndex;
+      }
+
+      if (
+        activeFieldAwaitingReason &&
+        isReasonFollowUpText(cleanText) &&
+        (!promptedFieldId || promptedFieldId === activeField?.id)
+      ) {
         matchedFieldIndex = activeIndex;
       }
 
@@ -7751,25 +8682,83 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     if (
       activeFieldAwaitingReason &&
       matchedFieldIndex > activeIndex &&
-      !isReasonFollowUpText(cleanText)
+      shouldHoldPendingReasonBeforeAgentJump(
+        activeField,
+        pendingReasonFieldRef.current,
+      )
     ) {
+      const jumpedField = kycFields[matchedFieldIndex];
+      if (shouldResyncAfterMissedRequiredFollowUp(activeField, jumpedField)) {
+        const updatedResponses = { ...kycResponsesRef.current };
+        if (
+          activeField?.reasonResponseId &&
+          !hasMeaningfulKycValue(updatedResponses[activeField.reasonResponseId])
+        ) {
+          updatedResponses[activeField.reasonResponseId] = "Destination not captured";
+          kycResponsesRef.current = updatedResponses;
+          setKycResponses(updatedResponses);
+        }
+        pendingReasonFieldRef.current = null;
+        console.log(
+          "[KYC] Resynced after missed required follow-up:",
+          activeField?.id,
+          "->",
+          jumpedField?.id,
+        );
+      } else {
       console.log(
-        "[KYC] Ignored premature jump to next field while reason is still pending:",
-        cleanText,
+        "[KYC] Held required reason before next prompt:",
+        activeField?.id,
+        "->",
+        kycFields[matchedFieldIndex]?.id,
+      );
+      await promptForPendingKycReason(
+        activeField,
+        pendingReasonFieldRef.current?.phase || "detail",
+        pendingReasonFieldRef.current?.detail || "",
       );
       return;
+      }
     }
-    if (
-      activeFieldAwaitingReason &&
-      promptedFieldId &&
-      promptedFieldId !== activeField?.id &&
-      !isReasonFollowUpText(cleanText)
-    ) {
+
+    if (activeFieldAwaitingReason && matchedFieldIndex > activeIndex) {
+      const updatedResponses = { ...kycResponsesRef.current };
+      recentReasonCarryoverRef.current = {
+        index: activeIndex,
+        fieldId: activeField?.id,
+        phase: pendingReasonFieldRef.current?.phase || "detail",
+        detail:
+          pendingReasonFieldRef.current?.detail ||
+          updatedResponses[activeField?.reasonResponseId] ||
+          "",
+        timestamp: now,
+      };
+      if (
+        pendingReasonFieldRef.current?.index === activeIndex &&
+        pendingReasonFieldRef.current?.phase === "duration" &&
+        hasMeaningfulKycValue(pendingReasonFieldRef.current?.detail)
+      ) {
+        recentReasonCarryoverRef.current = {
+          ...pendingReasonFieldRef.current,
+          timestamp: now,
+        };
+      }
+      if (
+        activeField?.requiresReasonOnYes &&
+        updatedResponses[activeField.id] === "Yes" &&
+        !hasRecordedKycValue(updatedResponses[activeField.reasonResponseId])
+      ) {
+        updatedResponses[activeField.reasonResponseId] = KYC_UNCAPTURED_VALUE;
+        kycResponsesRef.current = updatedResponses;
+        setKycResponses(updatedResponses);
+      }
+      pendingReasonFieldRef.current = null;
       console.log(
-        "[KYC] Ignored agent prompt for a different field while reason is still pending:",
-        cleanText,
+        "[KYC] Closed missing reason and allowed next prompt:",
+        activeField?.id,
+        "->",
+        kycFields[matchedFieldIndex]?.id,
       );
-      return;
     }
     console.log('Agent matched field:', matchedFieldIndex, 'current:', kycCurrentFieldIndexRef.current, 'text:', cleanText.slice(0, 50));
 
@@ -7806,11 +8795,17 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       clarificationTargetIndex < kycCurrentFieldIndexRef.current &&
       clarificationTargetField &&
       isKycFieldComplete(clarificationTargetField, kycResponsesRef.current);
+    const clarificationShouldUpdateCompletedName =
+      clarificationTargetsCompletedPastField &&
+      clarificationMode === "clarify" &&
+      clarificationTargetField &&
+      isFullNameField(clarificationTargetField) &&
+      /\bspell|full name|name\b/i.test(cleanText);
 
     if (
       clarificationMode &&
       clarificationTargetField &&
-      !clarificationTargetsCompletedPastField &&
+      (!clarificationTargetsCompletedPastField || clarificationShouldUpdateCompletedName) &&
       (
         matchedFieldIndex >= 0 ||
         (lastCommitted && Date.now() - lastCommitted.timestamp < 20000)
@@ -7823,6 +8818,14 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         text: cleanText,
         timestamp: now,
       };
+      if (clarificationMode === "clarify" && isFullNameField(clarificationTargetField)) {
+        pendingNameSpellingRef.current = {
+          index: clarificationTargetIndex,
+          fieldId: clarificationTargetField.id,
+          value: "",
+          timestamp: now,
+        };
+      }
       lastAgentAskedFieldRef.current = {
         index: clarificationTargetIndex,
         timestamp: now,
@@ -7833,11 +8836,31 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     }
 
   if (!kycCompleteRef.current && kycFields.length > 0) {
-  if (
-    matchedFieldIndex >= 0 &&
-    matchedFieldIndex !== kycCurrentFieldIndexRef.current &&
-    !activeFieldAwaitingReason
-  ) {
+      if (
+        matchedFieldIndex >= 0 &&
+        matchedFieldIndex !== kycCurrentFieldIndexRef.current
+      ) {
+    if (
+      matchedFieldIndex > kycCurrentFieldIndexRef.current &&
+      activeField &&
+      shouldHoldIncompleteFieldBeforeAgentJump(
+        activeField,
+        kycResponsesRef.current,
+      ) &&
+      !(
+        activeField.requiresReasonOnYes &&
+        kycResponsesRef.current[activeField.id] === "Yes" &&
+        isUncapturedKycValue(kycResponsesRef.current[activeField.reasonResponseId])
+      )
+    ) {
+      console.log(
+        "[KYC] Ignored premature jump while current field is incomplete:",
+        activeField.id,
+        "->",
+        kycFields[matchedFieldIndex]?.id,
+      );
+      matchedFieldIndex = -1;
+    } else {
     const wouldGoBackwards = matchedFieldIndex < kycCurrentFieldIndexRef.current;
     const targetAlreadyComplete = isKycFieldComplete(
       kycFields[matchedFieldIndex],
@@ -7859,9 +8882,11 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       kycCurrentFieldIndexRef.current = matchedFieldIndex;
       setKycCurrentFieldIndex(matchedFieldIndex);
     }
+    }
   }
 
   if (matchedFieldIndex >= 0) {
+    ignoredAgentFollowUpRef.current = null;
     lastAgentAskedFieldRef.current = {
       index: matchedFieldIndex,
       timestamp: now,
@@ -8000,7 +9025,7 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       console.error("KYC localization fallback:", err);
       if (languageCode === "hi") {
         return options.transcriptScript
-          ? getHindiTranscriptFallback(trimmed)
+          ? normalizeTranscriptEncoding(trimmed)
           : normalizeTranscriptEncoding(trimmed);
       }
       return normalizeTranscriptEncoding(trimmed);
@@ -8011,7 +9036,10 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     const trimmed = normalizeTranscriptDisplayAnswer(text);
     if (!trimmed || !preferredLanguage || preferredLanguage === "en") return normalizeTranscriptEncoding(trimmed);
     if (preferredLanguage === "hi") {
-      return localizeKycText(trimmed, preferredLanguage, { transcriptScript: true });
+      const localized = await localizeKycText(trimmed, preferredLanguage, { transcriptScript: true });
+      const cleanLocalized = normalizeTranscriptEncoding(localized);
+      if (cleanLocalized && normalize(cleanLocalized) !== normalize(trimmed)) return cleanLocalized;
+      return normalizeTranscriptEncoding(trimmed);
     }
     const fastDisplay = getFastTranscriptDisplayText(text, preferredLanguage);
     const shouldConvertMixedHindi =
@@ -8030,10 +9058,10 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     return localized;
   };
 
-  const promptForPendingKycReason = async (field, phase = "detail") => {
+  const promptForPendingKycReason = async (field, phase = "detail", detail = "") => {
     const repromptEnglish =
       phase === "duration"
-        ? "Please tell me since how long."
+        ? getKycReasonFollowUpPrompt(field, "duration", detail)
         : "Please tell me the actual condition or reason, not only yes or no.";
     try {
       const reprompt = await localizeKycText(repromptEnglish, preferredLanguage);
@@ -8183,6 +9211,8 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     const transcriptRecoveredResponses = recoverKycResponsesFromTranscript(kycChatMessages);
     const transcriptReliableFieldIds = new Set([
       ...PRESET_DEMO_KYC_FIELDS.map((field) => field.reasonResponseId).filter(Boolean),
+      "all_life_cover",
+      "all_ci_cover",
     ]);
     for (const [fieldId, value] of Object.entries(transcriptRecoveredResponses)) {
       if (fieldId === "application_no" && !/^\d{3,}$/.test(String(value || "").trim())) {
@@ -8302,6 +9332,23 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     }
     if (
       hasMeaningfulKycValue(nextResponses.existing_insurance_cover) &&
+      hasHabitKeyword(nextResponses.existing_insurance_cover)
+    ) {
+      const repairedHabit = cleanHabitAnswerForPdf(
+        combineKycReasonParts(
+          hasMeaningfulKycValue(nextResponses.habits_addictions)
+            ? nextResponses.habits_addictions
+            : "",
+          nextResponses.existing_insurance_cover,
+        ),
+      );
+      if (hasMeaningfulKycValue(repairedHabit)) {
+        nextResponses.habits_addictions = repairedHabit;
+      }
+      nextResponses.existing_insurance_cover = KYC_UNCAPTURED_VALUE;
+    }
+    if (
+      hasMeaningfulKycValue(nextResponses.existing_insurance_cover) &&
       isUnsafeKycPdfText(nextResponses.existing_insurance_cover)
     ) {
       nextResponses.existing_insurance_cover = KYC_UNCAPTURED_VALUE;
@@ -8388,20 +9435,23 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     }
 
     const travelValue = String(nextResponses.travel_outside_india || "").trim();
-    if (
-      travelValue &&
-      !isUncapturedLikeKycValue(travelValue) &&
-      !parseYesNoAnswer(travelValue) &&
-      isLikelyTravelDestinationText(travelValue)
+      if (
+        travelValue &&
+        !isUncapturedLikeKycValue(travelValue) &&
+        !parseYesNoAnswer(travelValue) &&
+        isLikelyTravelDestinationText(travelValue)
     ) {
       nextResponses.travel_outside_india = "Yes";
       nextResponses.travel_outside_india_reason = travelValue;
     } else if (
       nextResponses.travel_outside_india === "Yes" &&
-      !hasMeaningfulKycValue(nextResponses.travel_outside_india_reason)
+      (!hasMeaningfulKycValue(nextResponses.travel_outside_india_reason) ||
+        !isLikelyTravelDestinationText(nextResponses.travel_outside_india_reason))
     ) {
-      nextResponses.travel_outside_india = KYC_UNCAPTURED_VALUE;
-      nextResponses.travel_outside_india_reason = "";
+      nextResponses.travel_outside_india_reason =
+        nextResponses.travel_outside_india_reason === "Destination not captured"
+          ? "Destination not captured"
+          : "";
     }
     if (
       nextResponses.other_disease === "Yes" &&
@@ -9443,7 +10493,12 @@ Respond ONLY with valid JSON in this exact format:
       const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
       const pages = pdfDoc.getPages();
-      const directFillResult = fillNamedKycAcroFields(form, pages, activeFields, activeResponses);
+      if (isPresetDocument) drawPresetPageTwoLabelFixes(pages, helvetica);
+      if (isPresetDocument) drawPresetAutoDate(pages, helvetica);
+      const emptyAcroFillResult = { count: 0, matchedFieldIds: new Set() };
+      const directFillResult = isPresetDocument
+        ? emptyAcroFillResult
+        : fillNamedKycAcroFields(form, pages, activeFields, activeResponses);
       let acroFillResult = directFillResult;
       try {
         const unresolvedFields = activeFields.filter(
@@ -9498,37 +10553,11 @@ Respond ONLY with valid JSON in this exact format:
             scaled.type === "date" ||
             scaled.type === "number"
           ) {
-            // ---- CREATE TEXT FIELD ----
+            // Draw final text directly so browser PDF viewers do not show AcroForm
+            // appearance artifacts outside the intended cells.
             if (!pdfAnswer) continue;
             if (isUncapturedKycValue(answer) || isUncapturedLikeKycValue(answer)) continue;
-            if (Number(scaled.page || 0) >= 2) {
-              drawMappedPdfText(page, helvetica, pdfAnswer, scaled, pageHeight);
-              continue;
-            }
-            const fieldName = uniqueFieldName(`field_${scaled.fieldId}`);
-            const textField = form.createTextField(fieldName);
-
-            const x = scaled.inputX || 0;
-            // Convert from top-left origin (AI output) to bottom-left origin (pdf-lib)
-            const y = pageHeight - (scaled.inputY || 0) - (scaled.height || 14);
-            const width = scaled.width || 200;
-            const height = scaled.height || 14;
-            const fontSize = scaled.fontSize || 9;
-
-            textField.addToPage(page, {
-              x: x,
-              y: y,
-              width: width,
-              height: height,
-              font: helvetica,
-              borderWidth: 0,
-            });
-
-            textField.setText(toPdfSafeText(pdfAnswer, KYC_UNCAPTURED_LABEL));
-            textField.setFontSize(fontSize);
-
-            // Make it appear non-editable (visual only)
-            textField.defaultUpdateAppearances(helvetica);
+            drawMappedPdfText(page, helvetica, pdfAnswer, scaled, pageHeight);
           } else if (scaled.type === "yes_no") {
             // ---- CREATE YES/NO CHECKBOXES ----
             if (!pdfAnswer) continue;
@@ -9758,50 +10787,53 @@ Respond ONLY with valid JSON in this exact format:
   };
 
   const downloadKycTranscript = async () => {
-    const transcriptLines = collapseTranscriptLines(
-      buildVisibleTranscriptEntries(kycChatMessages, preferredLanguage).map((msg) => {
-        const role =
-          msg.role === "user"
-            ? "client"
-            : msg.role === "assistant"
-              ? "Dr."
-              : "System";
-        return `${role}: ${msg.text}`;
-      }),
-    );
-
-    if (!transcriptLines.length) return;
-
     const activeResponses = await buildEnglishKycResponsesForPdf(
       kycFields,
       kycResponsesRef.current || kycResponses,
     );
-    const capturedLines = kycFields
-      .filter((field) => !shouldSkipFieldForGender(field, activeResponses))
-      .map((field) => {
-        const answer = getKycPdfFillValue(field, activeResponses[field.id]);
-        if (!answer || isUncapturedLikeKycValue(answer)) return "";
-        const detail =
-          field.reasonResponseId && String(answer).trim().toLowerCase() === "yes"
-            ? getKycPdfFillValue(
-                { id: field.reasonResponseId, type: "text" },
-                activeResponses[field.reasonResponseId],
-              )
-            : "";
-        const detailText =
-          detail && !isUncapturedLikeKycValue(detail)
-            ? ` | Details: ${extractReasonFromAffirmativeAnswer(detail)}`
-            : "";
-        return `${field.label}: ${answer}${detailText}`;
-      })
-      .filter(Boolean);
+    const transcriptLines = [];
 
-    const content = [
-      transcriptLines.join("\n\n"),
-      capturedLines.length
-        ? `\n\nCaptured KYC Answers Used In PDF:\n${capturedLines.join("\n")}`
-        : "",
-    ].join("");
+    for (const field of kycFields) {
+      if (shouldSkipFieldForGender(field, activeResponses)) continue;
+      const rawAnswer = getKycPdfFillValue(field, activeResponses[field.id]);
+      const answer =
+        rawAnswer && !isUncapturedLikeKycValue(rawAnswer)
+          ? rawAnswer
+          : KYC_UNCAPTURED_LABEL;
+
+      const questionText = stripInlineYesDetailInstruction(
+        field.prompt || field.label || "",
+      );
+      const displayQuestion = await localizeKycText(
+        questionText,
+        preferredLanguage,
+        { transcriptScript: true },
+      );
+      const detail =
+        field.reasonResponseId && String(answer).trim().toLowerCase() === "yes"
+          ? getKycPdfFillValue(
+              { id: field.reasonResponseId, type: "text" },
+              activeResponses[field.reasonResponseId],
+            )
+          : "";
+      const displayAnswer =
+        detail && !isUncapturedLikeKycValue(detail)
+          ? `${answer}. Details: ${extractReasonFromAffirmativeAnswer(detail)}`
+          : answer;
+      const localizedAnswer =
+        preferredLanguage && preferredLanguage !== "en"
+          ? await localizeKycText(displayAnswer, preferredLanguage, {
+              transcriptScript: true,
+            })
+          : displayAnswer;
+
+      transcriptLines.push(`Dr.: ${displayQuestion || questionText}`);
+      transcriptLines.push(`client: ${localizedAnswer || displayAnswer}`);
+    }
+
+    if (!transcriptLines.length) return;
+
+    const content = transcriptLines.join("\n\n");
     const blob = new Blob([`\uFEFF${content}`], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -10000,7 +11032,11 @@ Respond ONLY with valid JSON in this exact format:
           !isLikelyFiller(cleanUserMessage, currentField) &&
           !isLikelyNonReasonAnswerForField(currentField.id, cleanUserMessage);
         if (!isRelevantReason) {
-          await promptForPendingKycReason(currentField, pendingReason?.phase || "detail");
+          await promptForPendingKycReason(
+            currentField,
+            pendingReason?.phase || "detail",
+            pendingReason?.detail || "",
+          );
           setIsKycLoading(false);
           return;
         }
@@ -10021,8 +11057,20 @@ Respond ONLY with valid JSON in this exact format:
           currentField.id,
           normalizedReason,
         );
-        if (!hasMeaningfulKycValue(sanitizedReason)) {
-          await promptForPendingKycReason(currentField, pendingReason?.phase || "detail");
+        const isDurationReasonPhase = (pendingReason?.phase || "detail") === "duration";
+        const durationReason = isDurationReasonPhase
+          ? sanitizeKycReasonDuration(reasonNormalized.englishText || cleanUserMessage)
+          : "";
+        const effectiveReason =
+          isDurationReasonPhase && hasMeaningfulKycValue(durationReason)
+            ? durationReason
+            : sanitizedReason;
+        if (!hasMeaningfulKycValue(effectiveReason)) {
+          await promptForPendingKycReason(
+            currentField,
+            pendingReason?.phase || "detail",
+            pendingReason?.detail || "",
+          );
           setIsKycLoading(false);
           return;
         }
@@ -10131,7 +11179,7 @@ Respond ONLY with valid JSON in this exact format:
             timestamp: Date.now(),
           };
           const durationPrompt = await localizeKycText(
-            getKycReasonFollowUpPrompt(currentField, "duration"),
+            getKycReasonFollowUpPrompt(currentField, "duration", sanitizedReason),
             preferredLanguage,
           );
           setKycChatMessages((prev) => [
@@ -10142,14 +11190,41 @@ Respond ONLY with valid JSON in this exact format:
           return;
         }
 
+        if (!hasDurationPhrase(effectiveReason) && !hasDurationPhrase(cleanUserMessage)) {
+          const refinedDetail = combineKycReasonParts(
+            pendingReason?.detail,
+            effectiveReason,
+          ) || effectiveReason;
+          const nextResponses = {
+            ...currentResponses,
+            [currentField.reasonResponseId]: refinedDetail,
+          };
+          kycResponsesRef.current = nextResponses;
+          setKycResponses(nextResponses);
+          pendingReasonFieldRef.current = {
+            index: currentIndex,
+            fieldId: currentField.id,
+            phase: "duration",
+            detail: refinedDetail,
+            timestamp: Date.now(),
+          };
+          lastCommittedTranscriptRef.current = {
+            normalizedText: normalize(cleanUserMessage),
+            agentTurn: agentTranscriptTurnRef.current,
+            timestamp: Date.now(),
+          };
+          lastAnswerTimestampRef.current = Date.now();
+          return;
+        }
+
         const combinedReason = combineKycReasonParts(
           pendingReason?.detail,
-          sanitizedReason,
+          effectiveReason,
         );
 
         const nextResponses = {
           ...currentResponses,
-          [currentField.reasonResponseId]: combinedReason || sanitizedReason,
+          [currentField.reasonResponseId]: combinedReason || effectiveReason,
         };
        kycResponsesRef.current = nextResponses;
 setKycResponses(nextResponses);
@@ -10353,7 +11428,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
           timestamp: Date.now(),
         };
         const followUpText = await localizeKycText(
-          getKycReasonFollowUpPrompt(currentField, nextPhase),
+          getKycReasonFollowUpPrompt(currentField, nextPhase, inlineReason),
           preferredLanguage,
         );
         setKycChatMessages((prev) => [
@@ -10463,6 +11538,8 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
       const form = pdfDoc.getForm();
       const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const pages = pdfDoc.getPages();
+      if (isPresetDocument) drawPresetPageTwoLabelFixes(pages, helvetica);
+      if (isPresetDocument) drawPresetAutoDate(pages, helvetica);
       const directFillResult = fillNamedKycAcroFields(form, pages, activeFields, activeResponses);
       let acroFillResult = directFillResult;
 
@@ -10647,9 +11724,9 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
   };
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} className="app-shell">
       {/* Sidebar */}
-      <aside style={styles.sidebar}>
+      <aside style={styles.sidebar} className="app-sidebar">
         <div style={styles.logoContainer}>
           <div style={styles.logoIcon}>
             <img
@@ -10684,9 +11761,9 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
       </aside>
 
       {/* Main */}
-      <main style={styles.main}>
-        <header style={styles.header}>
-          <div style={styles.headerLeft}>
+      <main style={styles.main} className="app-main">
+        <header style={styles.header} className="app-header">
+          <div style={styles.headerLeft} className="app-header-left">
             <img
               src={ConverxAILogoFull}
               alt="ConverxAI"
@@ -10700,7 +11777,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
             </span>
           </div>
         </header>
-        <div style={styles.content}>
+        <div style={styles.content} className="app-content">
           {/* === CALL LOGS TAB === */}
           {activeTab === "call-logs" && (
             <div style={styles.splitViewWide}>
@@ -11265,8 +12342,8 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
 
           {/* === KYC VOICE ORB TAB === */}
           {activeTab === "voice" && (
-            <div style={ft.layout}>
-              <div style={ft.side}>
+            <div style={ft.layout} className="kyc-call-layout">
+              <div style={ft.side} className="kyc-field-sidebar">
                 <div style={ft.sideHead}>
                   <div style={ft.sideDot} />
                   <span style={ft.sideTitle}>FMR Report</span>
@@ -11374,8 +12451,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                   </>
                 )}
 
-                {getCompletedKycFieldCount(kycFields, kycResponses) >=
-                  kycFields.length && (
+                {kycFields.length > 0 && (
                   <div style={ft.doneBox}>
                     <button style={ft.dlBtn} onClick={downloadCompletedKyc}>
                       <svg
@@ -11389,33 +12465,31 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                         <polyline points="7 10 12 15 17 10" />
                         <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                      Download Filled PDF
-                    </button>
-                    {kycChatMessages.length > 0 && (
-                      <button
-                        style={{
-                          ...ft.dlBtn,
-                          background: "linear-gradient(135deg,#0ea5e9,#0284c7)",
-                        }}
-                        onClick={downloadKycTranscript}
-                      >
-                        <svg
-                          width="15"
-                          height="15"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                          <polyline points="14 2 14 8 20 8" />
-                          <line x1="8" y1="13" x2="16" y2="13" />
-                          <line x1="8" y1="17" x2="14" y2="17" />
                         </svg>
-                        Download Transcript
+                        Download Filled PDF
                       </button>
-                    )}
+                    <button
+                      style={{
+                        ...ft.dlBtn,
+                        background: "linear-gradient(135deg,#0ea5e9,#0284c7)",
+                      }}
+                      onClick={downloadKycTranscript}
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                        <line x1="8" y1="13" x2="16" y2="13" />
+                        <line x1="8" y1="17" x2="14" y2="17" />
+                      </svg>
+                      Download Transcript
+                    </button>
                     {callRecordingBlob &&
                       !callTranscription && (
                         <button
@@ -11459,7 +12533,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           )}
                         </button>
                       )}
-                    {callRecordingBlob && (
+                    {(isRecordingCall || callRecordingBlob) && (
                       <button
                         style={{
                           ...ft.dlBtn,
@@ -11467,10 +12541,10 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         }}
                         onClick={downloadCallAudioRecording}
                       >
-                        Download Audio
+                        {callRecordingBlob ? "Download Audio" : "Stop & Download Audio"}
                       </button>
                     )}
-                    {callVideoRecordingBlob && (
+                    {(isRecordingCall || callVideoRecordingBlob) && (
                       <button
                         style={{
                           ...ft.dlBtn,
@@ -11478,7 +12552,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         }}
                         onClick={downloadCallVideoRecording}
                       >
-                        Download Video
+                        {callVideoRecordingBlob ? "Download Video" : "Stop & Download Video"}
                       </button>
                     )}
                     {callTranscription && (
@@ -11532,9 +12606,9 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
 
               <div
                 ref={callSurfaceRef}
-                className="relative flex min-h-[620px] flex-1 overflow-hidden rounded-none bg-[#6668ad] text-white lg:min-h-0"
+                className="kyc-call-surface relative flex min-h-[620px] flex-1 overflow-hidden rounded-none bg-[#6668ad] text-white lg:min-h-0"
               >
-                <div className="absolute left-0 right-0 top-0 z-30 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-b from-black/65 to-transparent px-3 py-3 sm:px-5">
+                <div className="kyc-call-topbar absolute left-0 right-0 top-0 z-30 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-b from-black/65 to-transparent px-3 py-3 sm:px-5">
                   <div className="flex min-w-0 items-center gap-3">
                     {isAvatarConnected && (
                       <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.8)]" />
@@ -11544,35 +12618,32 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                       <div className="text-[11px] font-semibold text-white/55">Carely Health</div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    {getCompletedKycFieldCount(kycFields, kycResponses) >=
-                      kycFields.length && (
+                  <div className="kyc-call-actions flex flex-wrap items-center justify-end gap-2">
+                    {kycFields.length > 0 && (
                       <>
                         <button className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-bold text-white shadow-lg" onClick={downloadCompletedKyc}>
                           Download Filled PDF
                         </button>
-                        {kycChatMessages.length > 0 && (
-                          <button
-                            className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-lg"
-                            onClick={downloadKycTranscript}
-                          >
-                            Download Transcript
-                          </button>
-                        )}
-                        {callRecordingBlob && (
+                        <button
+                          className="rounded-xl bg-sky-500 px-3 py-2 text-xs font-bold text-white shadow-lg"
+                          onClick={downloadKycTranscript}
+                        >
+                          Download Transcript
+                        </button>
+                        {(isRecordingCall || callRecordingBlob) && (
                           <button
                             className="rounded-xl bg-teal-500 px-3 py-2 text-xs font-bold text-white shadow-lg"
                             onClick={downloadCallAudioRecording}
                           >
-                            Audio
+                            {callRecordingBlob ? "Audio" : "Stop + Audio"}
                           </button>
                         )}
-                        {callVideoRecordingBlob && (
+                        {(isRecordingCall || callVideoRecordingBlob) && (
                           <button
                             className="rounded-xl bg-violet-500 px-3 py-2 text-xs font-bold text-white shadow-lg"
                             onClick={downloadCallVideoRecording}
                           >
-                            Video
+                            {callVideoRecordingBlob ? "Video" : "Stop + Video"}
                           </button>
                         )}
                         <button
@@ -11612,15 +12683,6 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         </option>
                       ))}
                     </select>
-                    {isAvatarConnected &&
-                      getCompletedKycFieldCount(kycFields, kycResponses) <
-                        kycFields.length && (
-                        <span className="rounded-xl border border-white/15 bg-white/10 px-3 py-2 text-xs font-bold text-white backdrop-blur">
-                          Q
-                          {Math.min(kycCurrentFieldIndex + 1, kycFields.length)}
-                          /{kycFields.length}
-                        </span>
-                      )}
                     {getCompletedKycFieldCount(kycFields, kycResponses) >=
                       kycFields.length && (
                       <span
@@ -11632,7 +12694,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                   </div>
                 </div>
 
-                <div className="relative flex h-full min-h-0 w-full items-stretch justify-stretch">
+                <div className="kyc-call-stage relative flex h-full min-h-0 w-full items-stretch justify-stretch">
                   {isExtractingFields ? (
                     <div style={ft.mid}>
                       <div
@@ -11728,7 +12790,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           Client
                         </div>
                       </div>
-                      <div data-avatar-stage className="absolute right-3 top-20 z-30 h-[34%] min-h-48 w-[34%] min-w-52 max-w-sm overflow-hidden rounded-xl border border-white/20 bg-slate-950 shadow-2xl sm:right-5 sm:top-20 sm:h-[38%] sm:w-[30%]">
+                      <div data-avatar-stage className="kyc-avatar-tile absolute right-3 top-20 z-30 h-[34%] min-h-48 w-[34%] min-w-52 max-w-sm overflow-hidden rounded-xl border border-white/20 bg-slate-950 shadow-2xl sm:right-5 sm:top-20 sm:h-[38%] sm:w-[30%]">
                         <BeyondPresenceStream
                           livekitUrl={beyondPresenceSession.livekitUrl}
                           livekitToken={beyondPresenceSession.livekitToken}
@@ -11764,6 +12826,12 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           }}
                           onListeningChange={(isListening) => {
                             setKycListening(isListening);
+                          }}
+                          onRemoteAudioTrack={(track) => {
+                            callRecordingConnectTrackRef.current?.(track);
+                          }}
+                          onLocalAudioTrack={(track) => {
+                            callRecordingConnectTrackRef.current?.(track);
                           }}
                           isMuted={isMuted}
                         />
@@ -11828,7 +12896,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           Client
                         </div>
                       </div>
-                      <div data-avatar-stage className="absolute right-3 top-20 z-30 h-[34%] min-h-48 w-[34%] min-w-52 max-w-sm overflow-hidden rounded-xl border border-white/20 bg-slate-950 shadow-2xl sm:right-5 sm:top-20 sm:h-[38%] sm:w-[30%]">
+                      <div data-avatar-stage className="kyc-avatar-tile absolute right-3 top-20 z-30 h-[34%] min-h-48 w-[34%] min-w-52 max-w-sm overflow-hidden rounded-xl border border-white/20 bg-slate-950 shadow-2xl sm:right-5 sm:top-20 sm:h-[38%] sm:w-[30%]">
                         <BeyondPresenceStream
                           livekitUrl={beyondPresenceSession.livekitUrl}
                           livekitToken={beyondPresenceSession.livekitToken}
@@ -11864,6 +12932,12 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           }}
                           onListeningChange={(isListening) => {
                             setKycListening(isListening);
+                          }}
+                          onRemoteAudioTrack={(track) => {
+                            callRecordingConnectTrackRef.current?.(track);
+                          }}
+                          onLocalAudioTrack={(track) => {
+                            callRecordingConnectTrackRef.current?.(track);
                           }}
                           isMuted={isMuted}
                         />
@@ -11952,14 +13026,19 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                 {isAvatarConnected &&
                   (kycImageCaptureStage === "id" ||
                     kycImageCaptureStage === "fullBody") && (
-                    <div className="absolute left-1/2 top-20 z-40 w-[min(92vw,520px)] -translate-x-1/2 rounded-2xl border border-amber-200/30 bg-slate-950/85 px-4 py-3 text-center text-sm font-semibold text-amber-100 shadow-2xl backdrop-blur">
+                    <div className="kyc-capture-notice absolute left-1/2 top-20 z-40 w-[min(92vw,520px)] -translate-x-1/2 rounded-2xl border border-amber-200/30 bg-slate-950/85 px-4 py-3 text-center text-sm font-semibold text-amber-100 shadow-2xl backdrop-blur">
                       <div className="text-xs uppercase tracking-wide text-amber-300">
-                        Auto image capture
+                        {kycImageCaptureStage === "id"
+                          ? "ID image capture"
+                          : "Head-to-toe image capture"}
                       </div>
                       <div className="mt-1">
                         {kycImageCaptureStage === "id"
-                          ? "Show the ID card to the BP call camera and hold steady."
-                          : "Step back for the head-to-toe photo and hold steady."}
+                          ? "Show only the PAN/Aadhaar card clearly. Keep all four edges visible and hold steady."
+                          : "Step back and stand centered. Keep head, body, and feet visible."}
+                      </div>
+                      <div className="mt-2 rounded-xl border border-amber-200/20 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-50">
+                        Capture will happen only after the frame is clear.
                       </div>
                       {autoCaptureStatus && (
                         <div className="mt-1 text-xs font-medium text-slate-300">
@@ -11970,7 +13049,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                   )}
 
                 {isAvatarConnected && (
-                  <div className="absolute bottom-24 left-3 z-30 flex max-h-44 w-[min(92vw,520px)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/85 text-white shadow-2xl backdrop-blur sm:left-5">
+                  <div className="kyc-live-transcript absolute bottom-24 left-3 z-30 flex max-h-44 w-[min(92vw,520px)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/85 text-white shadow-2xl backdrop-blur sm:left-5">
                     <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 text-xs font-bold text-slate-200">
                       <span>Live Transcript</span>
                       {kycTranscriptPreview && (
@@ -12003,7 +13082,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                 )}
 
                 {isChatOpen && (
-                  <div className="absolute bottom-24 right-3 top-20 z-40 flex w-[min(92vw,360px)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 shadow-2xl backdrop-blur sm:right-5">
+                  <div className="kyc-side-panel absolute bottom-24 right-3 top-20 z-40 flex w-[min(92vw,360px)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 shadow-2xl backdrop-blur sm:right-5">
                     <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm font-bold">
                       <span>Live Chat</span>
                       <button className="text-white/60 hover:text-white" onClick={() => setIsChatOpen(false)}>
@@ -12031,7 +13110,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                 )}
 
                 {isPeopleOpen && (
-                  <div className="absolute bottom-24 right-3 top-20 z-40 w-[min(92vw,320px)] overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 shadow-2xl backdrop-blur sm:right-5">
+                  <div className="kyc-side-panel absolute bottom-24 right-3 top-20 z-40 w-[min(92vw,320px)] overflow-hidden rounded-2xl border border-white/10 bg-slate-950/90 shadow-2xl backdrop-blur sm:right-5">
                     <div className="border-b border-white/10 px-4 py-3 text-sm font-bold">People</div>
                     <div className="space-y-3 p-4 text-sm">
                       <div className="flex items-center gap-3 rounded-2xl bg-white/[0.08] p-3">
@@ -12073,7 +13152,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                     kycFields.length ||
                     kycImageCaptureStage === "id" ||
                     kycImageCaptureStage === "fullBody") && (
-                    <div className="absolute bottom-3 left-1/2 z-40 flex w-[min(96vw,760px)] -translate-x-1/2 items-end justify-center gap-2 rounded-3xl bg-slate-950/50 px-2 py-2 shadow-2xl backdrop-blur sm:bottom-5 sm:gap-3 sm:px-4">
+                    <div className="kyc-call-controls absolute bottom-3 left-1/2 z-40 flex w-[min(96vw,760px)] -translate-x-1/2 items-end justify-center gap-2 rounded-3xl bg-slate-950/50 px-2 py-2 shadow-2xl backdrop-blur sm:bottom-5 sm:gap-3 sm:px-4">
                       {[
                         {
                           label: "Cam",
@@ -12134,7 +13213,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           type="button"
                           title={control.title}
                           onClick={control.onClick}
-                          className={`flex h-16 min-w-14 flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 px-2 text-[11px] font-bold shadow-lg transition sm:h-[76px] sm:min-w-[76px] sm:text-xs ${
+                          className={`kyc-control-button flex h-16 min-w-14 flex-col items-center justify-center gap-1 rounded-2xl border border-white/10 px-2 text-[11px] font-bold shadow-lg transition sm:h-[76px] sm:min-w-[76px] sm:text-xs ${
                             control.active
                               ? "bg-emerald-500/80 text-white"
                               : "bg-slate-950/80 text-slate-200 hover:bg-slate-800"
@@ -12148,7 +13227,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         type="button"
                         title="Leave"
                         onClick={endCallOnly}
-                        className="flex h-16 min-w-14 flex-col items-center justify-center gap-1 rounded-2xl border border-red-300/20 bg-red-600/90 px-2 text-[11px] font-bold text-white shadow-lg transition hover:bg-red-500 sm:h-[76px] sm:min-w-[76px] sm:text-xs"
+                        className="kyc-control-button flex h-16 min-w-14 flex-col items-center justify-center gap-1 rounded-2xl border border-red-300/20 bg-red-600/90 px-2 text-[11px] font-bold text-white shadow-lg transition hover:bg-red-500 sm:h-[76px] sm:min-w-[76px] sm:text-xs"
                       >
                         <DoorOpen size={22} />
                         <span>Leave</span>

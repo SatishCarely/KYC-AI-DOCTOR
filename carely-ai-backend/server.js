@@ -697,11 +697,14 @@ async function localizeKycText(text, languageCode, options = {}) {
         {
           role: 'system',
           content: hinglishMode && transcriptScriptMode
-            ? `Convert Carely KYC transcript text into proper Hindi written in Devanagari script.
+            ? `Convert Carely KYC transcript text into natural Hindi written in Devanagari script.
 
 Rules:
-- Return only patient-facing Hindi text in Devanagari.
+- Return only the patient-facing transcript line.
+- Use simple conversational Hindi. Keep common medical/form terms readable when needed.
+- Use Devanagari Hindi script. Do not return Roman Hinglish.
 - Preserve names, numbers, dates, acronyms, and form labels accurately.
+- Prefer natural phrases like "आपका", "जन्म तारीख", "नॉमिनी", "हाँ या नहीं", "ठीक है".
 - Keep common medical terms readable: BP, sugar, diabetes, thyroid, cholesterol, surgery, medicine, hospital, ECG, MRI, CT, HIV, AIDS.
 - Do not add "agar haan", "if yes", or extra detail instructions unless they are present in the source text.
 - Do not add explanations or notes.`
@@ -790,6 +793,19 @@ async function normalizeKycAnswer({
           .map((part) => part.replace(/[^a-z]/gi, '').toLowerCase())
           .sort((a, b) => b.length - a.length)[0] || '';
       };
+      const extractSpelledWords = (value) => {
+        const normalized = String(value || '')
+          .replace(/\b(?:space|blank|gap)\b/gi, '|')
+          .replace(/\b(?:surname|last name|family name)\b/gi, '|')
+          .replace(/[,\n;:/]+/g, '|');
+        return normalized
+          .split('|')
+          .map((group) => {
+            const letters = group.match(/\b[a-z]\b/gi);
+            return letters?.length >= 2 ? letters.join('').toLowerCase() : '';
+          })
+          .filter(Boolean);
+      };
 
       let cleaned = String(input || '')
         .replace(/^(my name is|name is|this is|i am|i'm|mera naam|mera naam hai|naam hai)\s+/i, '')
@@ -797,16 +813,9 @@ async function normalizeKycAnswer({
         .replace(/\s+/g, ' ')
         .trim();
       const spelledCompact = extractSpelledCompact(input);
+      const spelledWords = extractSpelledWords(input);
 
       const indianNameFixes = {
-        'sankop kira': 'Sankalp Khira',
-        'sankalp kira': 'Sankalp Khira',
-        'sankalp khira': 'Sankalp Khira',
-        'sankalp kheera': 'Sankalp Khira',
-        'sankalp kh eera': 'Sankalp Khira',
-        'sankal khira': 'Sankalp Khira',
-        'kira alpacaera': 'Sankalp Khira',
-        'alpacaera kira': 'Sankalp Khira',
         'raj esh': 'Rajesh',
         'sur esh': 'Suresh',
         'deep ak': 'Deepak',
@@ -834,11 +843,6 @@ async function normalizeKycAnswer({
         'lak shmi': 'Lakshmi',
         'sara swathi': 'Saraswathi',
       };
-      const spelledNameFixes = {
-        sankalpkhira: 'Sankalp Khira',
-        sankalpakhira: 'Sankalp Khira',
-        sankalpkheera: 'Sankalp Khira',
-      };
 
       const lowerCleaned = cleaned.toLowerCase();
       for (const [wrong, right] of Object.entries(indianNameFixes)) {
@@ -847,8 +851,10 @@ async function normalizeKycAnswer({
         }
       }
 
-      if (spelledCompact && spelledNameFixes[spelledCompact]) {
-        cleaned = spelledNameFixes[spelledCompact];
+      if (spelledWords.length >= 2) {
+        cleaned = spelledWords.join(' ');
+      } else if (spelledCompact && /^[a-z](?:\s+[a-z]){3,}$/i.test(cleaned)) {
+        cleaned = spelledCompact;
       }
 
       return cleaned
@@ -2135,20 +2141,20 @@ app.post('/api/beyondpresence/start-session', async (req, res) => {
       console.log(`[BeyondPresence] Falling back language ${requestedLanguage} -> ${providerLanguage}`);
     }
 
-    const fieldListBase = kycFields
-      .map((f, i) => {
+    const fieldListLines = await Promise.all(
+      kycFields.map(async (f, i) => {
         const genderTag = f.genderRestriction && f.genderRestriction !== 'all'
           ? ` [${f.genderRestriction.toUpperCase()} ONLY]`
           : '';
         const promptText = stripInlineYesDetailInstruction(f.prompt || f.label);
-        return `${i + 1}. ${promptText}${genderTag}`;
-      })
-      .join('\n');
-
-    const fieldListText =
-      preferredLanguage && preferredLanguage !== 'en'
-        ? stripInlineYesDetailInstruction(await localizeKycText(fieldListBase, preferredLanguage))
-        : fieldListBase;
+        const displayPrompt =
+          preferredLanguage && preferredLanguage !== 'en'
+            ? stripInlineYesDetailInstruction(await localizeKycText(promptText, preferredLanguage))
+            : promptText;
+        return `${i + 1}. ${displayPrompt}${genderTag}`;
+      }),
+    );
+    const fieldListText = fieldListLines.join('\n');
     const totalFieldCount = kycFields.length;
     const lastFieldPrompt = stripInlineYesDetailInstruction(
       kycFields[kycFields.length - 1]?.prompt ||
@@ -2182,10 +2188,12 @@ ${fieldListText}
 Rules:
 - You are not a general chatbot. Never answer personal questions, medical advice questions, or requests outside this form. Continue asking the current KYC field instead.
 - If the selected patient language is Hindi/Hinglish, keep questions conversational Hinglish and end yes/no questions with "haan ya nahi?".
-- You must ask every numbered field from 1 through ${totalFieldCount}. Do not announce completion until field ${totalFieldCount} has been answered: "${lastFieldPrompt}".
+- You must ask every applicable numbered field from 1 through ${totalFieldCount}. Gender-skipped fields are not applicable and must not be asked. Do not announce completion until the last applicable field has been answered.
 - Existing insurance cover is not the last field. After it, continue to life cover, critical illness cover, and the final declaration if they appear in the numbered list.
 - Ask only one field at a time and wait for the answer before moving on.
-- If gender is male, skip all [FEMALE ONLY] fields silently. If gender is female, skip all [MALE ONLY] fields silently.
+- If gender is male, skip all [FEMALE ONLY] fields silently. If gender is female, skip all [MALE ONLY] fields silently. Do not mention skipped fields.
+- After the patient answers gender as male, never ask pregnancy, mammogram, ultrasound, pap smear, menstrual, ovarian, uterine, or any other female-only question. Continue directly to the next all-gender field without discussing the skipped question.
+- After the patient answers gender as female, never ask male-only genital or penile questions. Continue directly to the next all-gender field without discussing the skipped question.
 - Never use ALL CAPS, shouting, or dramatic emphasis.
 - Do not say phrases like "IS THAT RIGHT?" or repeatedly ask for confirmation after normal answers.
 - Do not repeat the patient's previous answer back verbatim unless a clarification is genuinely needed.
@@ -2197,7 +2205,10 @@ Rules:
   - Never say "agar haan", "if yes", "toh detail", "thoda detail", or "please give details" inside the main yes/no question.
 - Keep those two follow-up answers attached to the same numbered field. Never use them as answers for the next field.
 - If a field needs a reason after "Yes", a bare "Yes", "No", "haan", or "nahi" is not a valid reason. Ask again for the actual condition or reason and stay on the same field.
-- If you asked "Since how long?" and the answer does not contain duration information, ask again and stay on the same field.
+- If the patient answers a condition directly, such as "chest pain", treat that as the detail for the current yes-detail field, then ask a contextual duration follow-up such as "For how long have you had chest pain?"
+- Duration follow-ups must use the condition just given when possible. Do not ask a generic disconnected question if the condition is known.
+- If the patient says Yes to travelling outside India, ask for the destination/country and wait for that answer. Do not continue to height, weight, habits, insurance, or declaration until the destination is answered.
+- If you asked a duration follow-up and the answer does not contain duration information, ask again and stay on the same field.
 - Do not ask recovery status, current status, treatment advice, or confirmation questions unless that exact field needs a missing answer.
 - Never move to the next numbered field until both required yes-detail follow-ups have been answered or the patient says they do not know.
 - If an answer is unclear, ask for clarification once, then continue.
