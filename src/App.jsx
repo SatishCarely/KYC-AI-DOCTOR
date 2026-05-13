@@ -1964,6 +1964,7 @@ const formatDateOfBirthForPdf = (value) => {
     .replace(/,/g, " ")
     .replace(/(\d+)(st|nd|rd|th)\b/g, "$1")
     .replace(/\b(date of birth|dob|born on|birth date|my birthday is)\b/g, " ")
+    .replace(/\bnineteen\s+six\s+(seventy|eighty|ninety)\b/gi, "nineteen $1")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -2506,6 +2507,8 @@ const formatNameForPdf = (value) => {
   return cleaned
     .split(/\s+/)
     .filter(Boolean)
+    .map((part) => part.replace(/^[.'-]+|[.'-]+$/g, ""))
+    .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(" ");
 };
@@ -2666,13 +2669,21 @@ const isKycFieldAwaitingReason = (field, responses = {}) =>
     field?.requiresReasonOnYes &&
     responses[field.id] === "Yes" &&
     (!hasRecordedKycValue(responses[field.reasonResponseId]) ||
-      (field.id !== "travel_outside_india" &&
+      (doesKycReasonNeedDuration(field) &&
         !hasDurationPhrase(responses[field.reasonResponseId]))),
   );
+
+const doesKycReasonNeedDuration = (field) =>
+  field?.id !== "travel_outside_india";
 
 const getKycReasonFollowUpPrompt = (field, phase = "detail", detail = "") => {
   const cleanDetail = extractReasonFromAffirmativeAnswer(detail);
   if (phase === "duration") {
+    if (field?.id === "diagnostic_tests") {
+      return cleanDetail
+        ? `When did you have ${cleanDetail}?`
+        : "When was this test or surgery done or advised?";
+    }
     return cleanDetail
       ? `For how long have you had ${cleanDetail}?`
       : "For how long have you had this condition?";
@@ -2692,11 +2703,34 @@ const getKycReasonFollowUpPrompt = (field, phase = "detail", detail = "") => {
   return "Please tell me the condition or reason.";
 };
 
+const dedupeKycReasonText = (value) => {
+  const parts = String(value || "")
+    .split(/\s*(?:[.;]|\n+)\s*/)
+    .map((part) => part.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const exactUniqueParts = parts.filter((part) => {
+    const key = normalize(part);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  const uniqueParts = exactUniqueParts.filter((part, index) => {
+    const key = normalize(part);
+    return !exactUniqueParts.some((other, otherIndex) => {
+      if (otherIndex === index) return false;
+      const otherKey = normalize(other);
+      return otherKey.length > key.length && otherKey.includes(key);
+    });
+  });
+  return uniqueParts.join(". ");
+};
+
 const combineKycReasonParts = (detail = "", duration = "") => {
   const cleanDetail = extractReasonFromAffirmativeAnswer(detail);
   const cleanDuration = extractReasonFromAffirmativeAnswer(duration).trim();
   const seen = new Set();
-  return [cleanDetail, cleanDuration]
+  return dedupeKycReasonText([cleanDetail, cleanDuration]
     .filter(Boolean)
     .filter((part) => {
       const key = normalize(part);
@@ -2704,7 +2738,7 @@ const combineKycReasonParts = (detail = "", duration = "") => {
       seen.add(key);
       return true;
     })
-    .join(". ");
+    .join(". "));
 };
 
 const hasDurationPhrase = (text) => {
@@ -2731,6 +2765,9 @@ const hasCompleteInlineKycReason = (reason, sourceText = "") =>
 const shouldHoldPendingReasonBeforeAgentJump = (field, pendingReason) => {
   if (!field?.requiresReasonOnYes) return false;
   if (field.id === "travel_outside_india") return true;
+  if (field.id === "diagnostic_tests" && pendingReason?.phase === "duration") {
+    return false;
+  }
   return (
     pendingReason?.phase === "duration" ||
     hasMeaningfulKycValue(pendingReason?.detail)
@@ -3492,7 +3529,7 @@ const sanitizeKycReasonForField = (fieldId, value) => {
     seen.add(key);
     return true;
   });
-  return uniqueParts.slice(0, 2).join(", ");
+  return dedupeKycReasonText(uniqueParts.slice(0, 2).join(". "));
 };
 
 const sanitizeKycReasonDuration = (value) => {
@@ -3502,6 +3539,17 @@ const sanitizeKycReasonDuration = (value) => {
     .replace(/\s+/g, " ")
     .trim();
   return hasDurationPhrase(cleaned) ? cleaned : "";
+};
+
+const isAcknowledgedNextKycPrompt = (text) => {
+  const normalized = normalizeIndicSpeechText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return /^(understood|thanks|thank you|alright|okay|ok|noted|got it)\b/.test(
+    normalized,
+  );
 };
 
 const recoverKycResponsesFromTranscript = (messages = []) => {
@@ -3558,6 +3606,16 @@ const recoverKycResponsesFromTranscript = (messages = []) => {
       }
       const promptedFieldId = getTranscriptPromptFieldId(text);
       if (promptedFieldId) {
+        if (
+          currentFieldId &&
+          promptedFieldId !== currentFieldId &&
+          isReasonKycFieldId(currentFieldId) &&
+          !hasRecordedKycValue(recovered[currentFieldId]) &&
+          !pendingReasonFieldId &&
+          isAcknowledgedNextKycPrompt(text)
+        ) {
+          recovered[currentFieldId] = "No";
+        }
         if (promptedFieldId !== pendingReasonFieldId) {
           pendingReasonFieldId = null;
         }
@@ -3876,7 +3934,13 @@ const isKycFieldComplete = (field, responses = {}) => {
   if (responses[field.id] !== 'Yes') return true;
   if (!hasRecordedKycValue(responses[field.reasonResponseId])) return false;
   if (isUncapturedKycValue(responses[field.reasonResponseId])) return true;
-  if (field.id === "travel_outside_india") return true;
+  if (
+    field.id === "diagnostic_tests" &&
+    /\btiming not captured\b/i.test(String(responses[field.reasonResponseId] || ""))
+  ) {
+    return true;
+  }
+  if (!doesKycReasonNeedDuration(field)) return true;
   return hasDurationPhrase(responses[field.reasonResponseId]);
 };
 
@@ -4044,7 +4108,7 @@ const cleanHabitAnswerForPdf = (value) => {
   if (!raw) return "";
   if (/^(none|no|nil|nothing|not applicable)$/i.test(raw)) return "No";
   if (!hasHabitKeyword(raw) && !hasDurationPhrase(raw)) return "";
-  return raw;
+  return dedupeKycReasonText(raw);
 };
 
 const isIncompleteHabitPhrase = (value) =>
@@ -5133,19 +5197,19 @@ const appendKycImageAttachmentsToPdf = async (
         });
       };
 
-      drawText("Face Match Score", margin, top, 16);
+      drawText("KYC Image Attachments", margin, top, 16);
       drawText("Customer Name", margin, top - 42, 11);
       drawText(metadata.customerName || "Not captured", margin + 150, top - 42, 11);
       drawText("Application No", margin, top - 68, 11);
       drawText(metadata.applicationNo || "Not captured", margin + 150, top - 68, 11);
-      drawText("Score %", margin, top - 94, 11);
-      drawText("Not calculated", margin + 150, top - 94, 11);
+      drawText("Captured Images", margin, top - 94, 11);
+      drawText("ID document and head-to-toe photo", margin + 150, top - 94, 11);
 
       const boxY = 135;
       const boxW = (pageWidth - margin * 2 - 24) / 2;
       const boxH = 520;
-      drawText("ID Photo:", margin, boxY + boxH + 18, 12);
-      drawText("Live Photo:", margin + boxW + 24, boxY + boxH + 18, 12);
+      drawText("ID Document Photo:", margin, boxY + boxH + 18, 12);
+      drawText("Head-to-toe Customer Photo:", margin + boxW + 24, boxY + boxH + 18, 12);
       page.drawRectangle({
         x: margin,
         y: boxY,
@@ -6830,19 +6894,19 @@ const CarelyAIAssistant = () => {
     if (metrics.brightness > 238) return "Too bright. Please reduce glare before capture.";
     if (metrics.glareRatio > 0.1) return "Glare detected. Tilt slightly and hold steady.";
 
-    const minimumSharpness = stage === "id" ? 8.5 : 3.5;
-    const minimumContrast = stage === "id" ? 14 : 6;
+    const minimumSharpness = stage === "id" ? 4.5 : 3.5;
+    const minimumContrast = stage === "id" ? 7 : 6;
     if (metrics.sharpness < minimumSharpness || metrics.contrast < minimumContrast) {
       return "Image is not clear enough. Hold steady and keep the subject in focus.";
     }
 
     const bounds = getCallForegroundBounds(metrics);
     if (stage === "id") {
-      if (!bounds || bounds.coverageRatio < 0.035 || bounds.widthRatio < 0.25 || bounds.heightRatio < 0.12) {
+      if (!bounds || bounds.coverageRatio < 0.015 || bounds.widthRatio < 0.18 || bounds.heightRatio < 0.08) {
         return "Show the ID card clearly in front of the camera.";
       }
       const aspectRatio = bounds.widthRatio / Math.max(0.01, bounds.heightRatio);
-      if (aspectRatio < 1.05 || aspectRatio > 2.4) {
+      if (aspectRatio < 0.85 || aspectRatio > 3.2) {
         return "Keep the ID card straight and fully visible.";
       }
       if (bounds.yRatio > 0.62 || bounds.yRatio + bounds.heightRatio < 0.28) {
@@ -6934,12 +6998,31 @@ const CarelyAIAssistant = () => {
     }
   };
 
-  const tryAutoCaptureCallImages = (reason = "auto") => {
+  const requiresPostKycImageCapture = () =>
+    kycCompleteRef.current && kycResponsesRef.current?.declaration === "Yes";
+
+  const ensurePostKycImageCaptureReady = () => {
+    if (!requiresPostKycImageCapture()) return true;
+    if (idDocumentPhoto && fullBodyPhoto) return true;
+
+    if (!idDocumentPhoto) {
+      startKycImageCaptureStage("id");
+    } else if (!fullBodyPhoto) {
+      startKycImageCaptureStage("fullBody");
+    }
+
+    alert(
+      "Please complete the ID and head-to-toe photo capture before downloading the MER PDF.",
+    );
+    return false;
+  };
+
+  const tryAutoCaptureCallImages = (reason = "auto", { force = false } = {}) => {
     const video = userVideoRef.current;
     if (!video || !video.videoWidth || kycImageCaptureStage === "idle") return false;
     const elapsed = Date.now() - kycImageCaptureStageStartedAtRef.current;
     const prepareMs = kycImageCaptureStage === "id" ? 5500 : 6500;
-    if (elapsed < prepareMs) {
+    if (!force && elapsed < prepareMs) {
       const secondsLeft = Math.max(1, Math.ceil((prepareMs - elapsed) / 1000));
       setAutoCaptureStatus(
         kycImageCaptureStage === "id"
@@ -6953,8 +7036,22 @@ const CarelyAIAssistant = () => {
     if (!canvas) return false;
     const qualityMessage = validateCallCaptureFrame(kycImageCaptureStage, canvas);
     if (qualityMessage) {
-      setAutoCaptureStatus(qualityMessage);
-      return false;
+      if (!force) {
+        setAutoCaptureStatus(qualityMessage);
+        return false;
+      }
+      const isVeryBadFrame =
+        !canvas.width ||
+        !canvas.height ||
+        (kycImageCaptureStage === "id" &&
+          /too dark|too bright|glare/i.test(qualityMessage));
+      if (isVeryBadFrame) {
+        setAutoCaptureStatus(qualityMessage);
+        return false;
+      }
+      setAutoCaptureStatus(
+        `Manual capture accepted. Quality warning: ${qualityMessage}`,
+      );
     }
 
     const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
@@ -7949,6 +8046,32 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         targetFieldIndex = nextPendingIndex;
       }
     }
+    if (!pendingReason && !hasFreshClarification) {
+      const recentCommitted = lastCommittedFieldRef.current;
+      const committedField =
+        recentCommitted?.index != null ? kycFields[recentCommitted.index] : null;
+      if (
+        committedField &&
+        ["height_cm", "weight_kg"].includes(committedField.id) &&
+        targetFieldIndex > recentCommitted.index &&
+        now - recentCommitted.timestamp < 12000
+      ) {
+        const lateNumeric = cleanRecoveredTranscriptAnswer(
+          committedField.id,
+          cleanText,
+        );
+        const currentNumeric = cleanRecoveredTranscriptAnswer(
+          committedField.id,
+          currentResponses[committedField.id],
+        );
+        if (
+          lateNumeric &&
+          (!currentNumeric || Number(lateNumeric) !== Number(currentNumeric))
+        ) {
+          targetFieldIndex = recentCommitted.index;
+        }
+      }
+    }
     const answerMode =
       pendingReason
         ? 'reason'
@@ -8184,13 +8307,16 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
             targetField.requiresReasonOnYes &&
             correctedResponses[targetField.id] === 'Yes' &&
             (!hasMeaningfulKycValue(correctedResponses[targetField.reasonResponseId]) ||
-              !hasCompleteInlineKycReason(
-                correctedResponses[targetField.reasonResponseId],
-                correctionText,
-              ));
+              (doesKycReasonNeedDuration(targetField) &&
+                !hasCompleteInlineKycReason(
+                  correctedResponses[targetField.reasonResponseId],
+                  correctionText,
+                )));
 
           if (correctionNeedsReason) {
-            const nextReasonPhase = hasMeaningfulKycValue(inlineCorrectionReason)
+            const nextReasonPhase =
+              hasMeaningfulKycValue(inlineCorrectionReason) &&
+              doesKycReasonNeedDuration(targetField)
               ? 'duration'
               : 'detail';
             pendingReasonFieldRef.current = {
@@ -8283,7 +8409,7 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         }
 
         if ((pendingReason?.phase || "detail") === "detail") {
-          if (currentField.id === "travel_outside_india") {
+          if (!doesKycReasonNeedDuration(currentField)) {
             const nextResponses = {
               ...currentResponses,
               [currentField.reasonResponseId]: sanitizedReason,
@@ -8615,7 +8741,7 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       activeFieldAwaitingReason &&
       !pendingReasonFieldRef.current &&
       activeField?.reasonResponseId &&
-      activeField.id !== "travel_outside_india" &&
+      doesKycReasonNeedDuration(activeField) &&
       hasMeaningfulKycValue(kycResponsesRef.current[activeField.reasonResponseId]) &&
       !hasDurationPhrase(kycResponsesRef.current[activeField.reasonResponseId])
     ) {
@@ -8749,6 +8875,18 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         !hasRecordedKycValue(updatedResponses[activeField.reasonResponseId])
       ) {
         updatedResponses[activeField.reasonResponseId] = KYC_UNCAPTURED_VALUE;
+        kycResponsesRef.current = updatedResponses;
+        setKycResponses(updatedResponses);
+      } else if (
+        activeField?.id === "diagnostic_tests" &&
+        activeField.reasonResponseId &&
+        hasMeaningfulKycValue(updatedResponses[activeField.reasonResponseId]) &&
+        !hasDurationPhrase(updatedResponses[activeField.reasonResponseId])
+      ) {
+        updatedResponses[activeField.reasonResponseId] = combineKycReasonParts(
+          updatedResponses[activeField.reasonResponseId],
+          "Timing not captured",
+        );
         kycResponsesRef.current = updatedResponses;
         setKycResponses(updatedResponses);
       }
@@ -10459,6 +10597,7 @@ Respond ONLY with valid JSON in this exact format:
       "pdfBytes:",
       !!kycPdfBytes,
     );
+    if (!ensurePostKycImageCaptureReady()) return;
     const activeFields = kycFieldsRef.current.length
       ? kycFieldsRef.current
       : kycFields;
@@ -11076,7 +11215,7 @@ Respond ONLY with valid JSON in this exact format:
         }
 
         if ((pendingReason?.phase || "detail") === "detail") {
-          if (currentField.id === "travel_outside_india") {
+          if (!doesKycReasonNeedDuration(currentField)) {
             const nextResponses = {
               ...currentResponses,
               [currentField.reasonResponseId]: sanitizedReason,
@@ -13026,25 +13165,54 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                 {isAvatarConnected &&
                   (kycImageCaptureStage === "id" ||
                     kycImageCaptureStage === "fullBody") && (
-                    <div className="kyc-capture-notice absolute left-1/2 top-20 z-40 w-[min(92vw,520px)] -translate-x-1/2 rounded-2xl border border-amber-200/30 bg-slate-950/85 px-4 py-3 text-center text-sm font-semibold text-amber-100 shadow-2xl backdrop-blur">
-                      <div className="text-xs uppercase tracking-wide text-amber-300">
+                    <div className="kyc-capture-notice absolute left-1/2 top-20 z-40 w-[min(94vw,720px)] -translate-x-1/2 rounded-3xl border border-amber-200/40 bg-slate-950/92 px-5 py-5 text-center font-semibold text-amber-100 shadow-2xl backdrop-blur sm:px-8 sm:py-6">
+                      <div className="text-xs uppercase tracking-[0.22em] text-amber-300">
                         {kycImageCaptureStage === "id"
                           ? "ID image capture"
                           : "Head-to-toe image capture"}
                       </div>
-                      <div className="mt-1">
+                      <div className="mt-2 text-2xl font-black leading-tight text-white sm:text-3xl">
                         {kycImageCaptureStage === "id"
-                          ? "Show only the PAN/Aadhaar card clearly. Keep all four edges visible and hold steady."
-                          : "Step back and stand centered. Keep head, body, and feet visible."}
+                          ? "Show your ID card clearly"
+                          : "Stand for head-to-toe photo"}
                       </div>
-                      <div className="mt-2 rounded-xl border border-amber-200/20 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-50">
+                      <div className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-amber-50 sm:text-base">
+                        {kycImageCaptureStage === "id"
+                          ? "Keep all four corners visible, avoid glare, fill the guide area, and hold the card steady."
+                          : "Step back and stand centered. Keep your head, body, legs, and feet visible in the frame."}
+                      </div>
+                      <div className="mt-4 rounded-2xl border border-amber-200/20 bg-amber-300/10 px-4 py-3 text-sm font-bold text-amber-50">
                         Capture will happen only after the frame is clear.
                       </div>
                       {autoCaptureStatus && (
-                        <div className="mt-1 text-xs font-medium text-slate-300">
+                        <div className="mt-3 rounded-2xl bg-black/35 px-4 py-3 text-sm font-bold text-slate-100">
                           {autoCaptureStatus}
                         </div>
                       )}
+                      <div className="mt-4 flex flex-wrap justify-center gap-3">
+                        <button
+                          type="button"
+                          className="rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-black text-white shadow-lg"
+                          onClick={() => {
+                            if (!tryAutoCaptureCallImages("manual capture", { force: true })) {
+                              setAutoCaptureStatus(
+                                "Frame is not clear yet. Follow the guidance above and try again.",
+                              );
+                            }
+                          }}
+                        >
+                          Capture Now
+                        </button>
+                        {cameraDevices.length > 1 && (
+                          <button
+                            type="button"
+                            className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white"
+                            onClick={switchToNextCamera}
+                          >
+                            Switch Camera
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
 

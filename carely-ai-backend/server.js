@@ -2207,6 +2207,7 @@ Rules:
 - If a field needs a reason after "Yes", a bare "Yes", "No", "haan", or "nahi" is not a valid reason. Ask again for the actual condition or reason and stay on the same field.
 - If the patient answers a condition directly, such as "chest pain", treat that as the detail for the current yes-detail field, then ask a contextual duration follow-up such as "For how long have you had chest pain?"
 - Duration follow-ups must use the condition just given when possible. Do not ask a generic disconnected question if the condition is known.
+- For the X-ray, CT scan, MRI, ECG, blood test, or surgery field: after the patient gives the test or surgery detail, ask when it was done or advised before moving to the next field.
 - If the patient says Yes to travelling outside India, ask for the destination/country and wait for that answer. Do not continue to height, weight, habits, insurance, or declaration until the destination is answered.
 - If you asked a duration follow-up and the answer does not contain duration information, ask again and stay on the same field.
 - Do not ask recovery status, current status, treatment advice, or confirmation questions unless that exact field needs a missing answer.
