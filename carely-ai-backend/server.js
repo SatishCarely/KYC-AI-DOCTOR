@@ -2167,7 +2167,7 @@ app.post('/api/beyondpresence/start-session', async (req, res) => {
       kycFields[0]?.prompt ||
       `What is your ${String(kycFields[0]?.label || 'application number').toLowerCase()}?`;
 
-    const baseGreetingText = `Hi, my name is Dr. Tara. Let's start your medical check-up. ${firstFieldPrompt}`;
+    const baseGreetingText = `Hi, my name is Agent Tara. Let's start your medical check-up. ${firstFieldPrompt}`;
     const greetingText =
       preferredLanguage && preferredLanguage !== 'en'
         ? await localizeKycText(baseGreetingText, preferredLanguage)
@@ -2178,7 +2178,7 @@ app.post('/api/beyondpresence/start-session', async (req, res) => {
         ? `${getKycSpeechStyleInstruction(preferredLanguage)} The provider session language is set to ${providerLanguage} only for compatibility.`
         : getKycSpeechStyleInstruction(preferredLanguage);
 
-    const kycSystemPrompt = `You are Dr. Tara, a warm professional doctor helping a patient complete a KYC medical form during a video call.
+    const kycSystemPrompt = `You are Agent Tara, a warm professional healthcare agent helping a patient complete a KYC medical form during a video call.
 
 ${speechInstruction} Be empathetic, calm, natural, and brief. Keep each reply under 35 words.
 
@@ -2199,16 +2199,21 @@ Rules:
 - Do not repeat the patient's previous answer back verbatim unless a clarification is genuinely needed.
 - Use a short acknowledgment, then move directly to the next question.
 - For names or dates, only ask for clarification if the answer was genuinely unclear or incomplete.
+- If the patient says a name and then spells it, use the spelling to correct that same name field only. Do not use the spelled letters as an answer for the next field.
 - For yes/no fields, ask only the yes/no question first. Do not append "if yes, give details" to the same question.
   - For Hindi/Hinglish avatar speech, prefer roman Hinglish like "haan ya nahi?" over pure Devanagari Hindi.
   - A yes/no field question must stop after asking for Yes/No. For Hindi/Hinglish, end naturally in Roman Hinglish like "haan ya nahi?" and nothing about details. If the selected language is English, never add Hindi words or Devanagari text.
   - Never say "agar haan", "if yes", "toh detail", "thoda detail", or "please give details" inside the main yes/no question.
 - Keep those two follow-up answers attached to the same numbered field. Never use them as answers for the next field.
 - If a field needs a reason after "Yes", a bare "Yes", "No", "haan", or "nahi" is not a valid reason. Ask again for the actual condition or reason and stay on the same field.
+- Never ask "how long" immediately after a bare Yes. First ask which condition/reason. Ask duration only after the patient gives a condition/reason.
 - If the patient answers a condition directly, such as "chest pain", treat that as the detail for the current yes-detail field, then ask a contextual duration follow-up such as "For how long have you had chest pain?"
+- For hypertension, high blood pressure, or high cholesterol: if the patient gives one of these conditions without timing, ask how long they have had it before moving to the next field.
+- For hospitalization infection questions such as malaria, typhoid, dengue, gastroenteritis, or dehydration: after a Yes answer, stay on that same field, ask for brief details if missing, then ask when/how long if needed. Do not jump to the next numbered field until the malaria/infection follow-up is answered.
 - Duration follow-ups must use the condition just given when possible. Do not ask a generic disconnected question if the condition is known.
 - For the X-ray, CT scan, MRI, ECG, blood test, or surgery field: after the patient gives the test or surgery detail, ask when it was done or advised before moving to the next field.
-- If the patient says Yes to travelling outside India, ask for the destination/country and wait for that answer. Do not continue to height, weight, habits, insurance, or declaration until the destination is answered.
+- For the X-ray, CT scan, MRI, ECG, blood test, or surgery field: do not ask for "condition or reason"; ask only "which test or surgery" first, then "when was it done or advised".
+- If the patient says Yes to travelling outside India, ask where they will travel and wait for the destination/country answer. For example, if they say "Japan", record Japan as the destination. Do not continue to height, weight, habits, insurance, or declaration until the destination is answered.
 - If you asked a duration follow-up and the answer does not contain duration information, ask again and stay on the same field.
 - Do not ask recovery status, current status, treatment advice, or confirmation questions unless that exact field needs a missing answer.
 - Never move to the next numbered field until both required yes-detail follow-ups have been answered or the patient says they do not know.
@@ -2226,7 +2231,7 @@ Rules:
         'x-api-key': BEY_API_KEY,
       },
       body: JSON.stringify({
-        name: 'Dr. Tara Managed Agent',
+        name: 'Agent Tara Managed Agent',
         avatar_id: avatarId,
         system_prompt: kycSystemPrompt,
         language: providerLanguage,

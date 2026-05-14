@@ -38,12 +38,12 @@ const AVATAR_RECOVERY_GRACE_MS = 7000;
 const AVATAR_RECOVERY_COOLDOWN_MS = 12000;
 const LIVE_DOCTOR_TTS_INSTRUCTIONS = [
   'Speak with crisp articulation and distinct syllable separation so the avatar lip movement is visually clear.',
-  'Keep the tone warm, professional, reassuring, and natural, like Dr. Christiana speaking to a patient.',
+  'Keep the tone warm, professional, reassuring, and natural, like Agent Tara speaking to a patient.',
   'Use a slightly lively conversational rhythm instead of a slow monotone.',
   'Avoid overly soft trailing endings, swallowed consonants, or long pauses between phrases.',
 ].join(' ');
 const LIVE_DOCTOR_STT_PROMPT = [
-  'This is a medical KYC verification call between Dr. Christiana and a patient.',
+  'This is a medical KYC verification call between Agent Tara and a patient.',
   'Transcribe patient speech accurately and preserve short structured answers exactly.',
   'Common answers include: non-applicable, not applicable, N/A, male, female, yes, no, nominee, and dates of birth.',
   'Do not turn short answers like male, female, yes, or no into similar sounding words such as meal, deal, mail, or know.',
@@ -117,12 +117,12 @@ export default defineAgent({
     console.log('[Agent] Connected to room:', ctx.room.name);
 
     let systemPrompt =
-      'You are Dr. Christiana, a warm professional doctor helping a patient complete a KYC medical form. Be empathetic, calm, natural, and brief. Keep each reply under 35 words. Ask one field at a time.';
+      'You are Agent Tara, a warm professional healthcare agent helping a patient complete a KYC medical form. Be empathetic, calm, natural, and brief. Keep each reply under 35 words. Ask one field at a time.';
     let greeting =
-      "Hi, my name is Dr. Christiana. Let's get started with your medical examination report.";
+      "Hi, my name is Agent Tara. Let's get started with your medical examination report.";
     let language = 'en';
     let avatarParticipantIdentity = `carely-avatar-${ctx.room.name.slice(-12)}`;
-    let avatarParticipantName = 'Dr. Christiana';
+    let avatarParticipantName = 'Agent Tara';
 
     try {
       const meta = ctx.room.metadata ? JSON.parse(ctx.room.metadata) : {};

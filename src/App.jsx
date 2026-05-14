@@ -1321,7 +1321,7 @@ const PRESET_DEMO_KYC_FIELDS = [
     type: "yes_no",
     section: "Travel",
     prompt: "Do you intend to travel outside India within the next 3 months?",
-    followUpIfYes: "Please tell me the destination.",
+    followUpIfYes: "Where outside India will you travel?",
     reasonPromptLabel: "If yes, please tell me the destination",
     matchHints: [
       "travel outside india within the next 3 months",
@@ -2418,6 +2418,20 @@ const combinePartialKycAnswerText = (field, previousValue, nextText) => {
   return `${previousDigits} ${next}`;
 };
 
+const combinePhoneTranscriptAnswer = (previousValue, nextText) => {
+  const previousDigits = getPhoneDigitsForKyc(previousValue);
+  const nextDigits = getPhoneDigitsForKyc(nextText);
+  if (!nextDigits) return previousDigits || "";
+  if (!previousDigits) return nextText;
+  if (nextDigits.startsWith(previousDigits)) return nextText;
+  if (previousDigits.endsWith(nextDigits)) return previousDigits;
+  if (previousDigits.length >= 10 && nextDigits.length >= 8) {
+    return `${previousDigits.slice(0, 2)} ${nextText}`;
+  }
+  if (previousDigits.length < 10) return `${previousDigits} ${nextText}`;
+  return previousDigits;
+};
+
 const getSpelledNameCompact = (input) => {
   const matches = String(input || "").match(/(?:\b[a-z]\b[\s-]*){3,}/gi);
   if (!matches?.length) return "";
@@ -2461,29 +2475,26 @@ const splitCompactSpelledName = (compact, previousValue = "") => {
     }
   }
 
-  const surnameStarts = [
-    "chaudh",
-    "choudh",
-    "kumar",
-    "singh",
-    "patel",
-    "sharma",
-    "verma",
-    "gupta",
-    "jain",
-    "rao",
-    "reddy",
-  ];
-  for (const start of surnameStarts) {
-    const index = compactName.indexOf(start, 2);
-    if (index >= 2 && compactName.length - index >= 3) {
-      return `${compactName.slice(0, index)} ${compactName.slice(index)}`;
-    }
-  }
-
   const splitAt = Math.min(8, Math.max(3, Math.round(compactName.length * 0.42)));
   if (compactName.length - splitAt < 3) return compactName;
   return `${compactName.slice(0, splitAt)} ${compactName.slice(splitAt)}`;
+};
+
+const compactNameLetters = (value = "") =>
+  String(value || "").replace(/[^a-z]/gi, "").toLowerCase();
+
+const isSpelledNameSafeCorrection = (previousValue = "", compactCorrection = "") => {
+  const previousCompact = compactNameLetters(previousValue);
+  const nextCompact = compactNameLetters(compactCorrection);
+  if (!previousCompact || !nextCompact) return true;
+  if (nextCompact.length < previousCompact.length - 1) return false;
+  let mismatches = 0;
+  const limit = Math.min(previousCompact.length, nextCompact.length);
+  for (let index = 0; index < limit; index += 1) {
+    if (previousCompact[index] !== nextCompact[index]) mismatches += 1;
+  }
+  mismatches += Math.abs(previousCompact.length - nextCompact.length);
+  return mismatches === 0;
 };
 
 const formatNameForPdf = (value) => {
@@ -2690,7 +2701,7 @@ const getKycReasonFollowUpPrompt = (field, phase = "detail", detail = "") => {
   }
   const label = String(field?.label || field?.prompt || "this condition").trim();
   if (/travel outside india|destination/i.test(label)) {
-    return "Please tell me the destination.";
+    return "Where outside India will you travel?";
   }
   if (/cancer|tumou?r|cyst|growth|lymph/i.test(label)) return "Which one?";
   if (/medication|medicine|treatment/i.test(label)) {
@@ -2765,13 +2776,42 @@ const hasCompleteInlineKycReason = (reason, sourceText = "") =>
 const shouldHoldPendingReasonBeforeAgentJump = (field, pendingReason) => {
   if (!field?.requiresReasonOnYes) return false;
   if (field.id === "travel_outside_india") return true;
-  if (field.id === "diagnostic_tests" && pendingReason?.phase === "duration") {
+  if (field.id === "diagnostic_tests") {
     return false;
   }
-  return (
-    pendingReason?.phase === "duration" ||
-    hasMeaningfulKycValue(pendingReason?.detail)
-  );
+  return true;
+};
+
+const getBlockingIncompleteReasonFieldBeforePrompt = (
+  fields = [],
+  responses = {},
+  matchedFieldIndex = -1,
+) => {
+  if (matchedFieldIndex <= 0) return null;
+  const startIndex = Math.min(matchedFieldIndex - 1, fields.length - 1);
+  for (let index = startIndex; index >= 0; index -= 1) {
+    const field = fields[index];
+    if (
+      field.id === "diagnostic_tests" ||
+      !field?.requiresReasonOnYes ||
+      shouldSkipFieldForGender(field, responses) ||
+      responses[field.id] !== "Yes" ||
+      isKycFieldComplete(field, responses)
+    ) {
+      continue;
+    }
+
+    const detail = field.reasonResponseId
+      ? responses[field.reasonResponseId]
+      : "";
+    return {
+      field,
+      index,
+      phase: hasMeaningfulKycValue(detail) ? "duration" : "detail",
+      detail: hasMeaningfulKycValue(detail) ? detail : "",
+    };
+  }
+  return null;
 };
 
 const shouldResyncAfterMissedRequiredFollowUp = (field, nextField) => {
@@ -2819,8 +2859,8 @@ const getHindiTranscriptFallback = (text) => {
 
   const contains = (...terms) => terms.some((term) => normalized.includes(term));
 
-  if (contains("my name is dr tara", "mera naam dr tara")) {
-    return "à¤¹à¤¾à¤¯, à¤®à¥‡à¤°à¤¾ à¤¨à¤¾à¤® Dr. Tara à¤¹à¥ˆà¥¤ à¤šà¤²à¤¿à¤ à¤†à¤ªà¤•à¤¾ à¤®à¥‡à¤¡à¤¿à¤•à¤² à¤šà¥‡à¤•-à¤…à¤ª à¤¶à¥à¤°à¥‚ à¤•à¤°à¤¤à¥‡ à¤¹à¥ˆà¤‚à¥¤ à¤†à¤ªà¤•à¤¾ application number à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
+  if (contains("my name is agent tara", "my name is dr tara", "mera naam agent tara", "mera naam dr tara")) {
+    return "à¤¹à¤¾à¤¯, à¤®à¥‡à¤°à¤¾ à¤¨à¤¾à¤® Agent Tara à¤¹à¥ˆà¥¤ à¤šà¤²à¤¿à¤ à¤†à¤ªà¤•à¤¾ à¤®à¥‡à¤¡à¤¿à¤•à¤² à¤šà¥‡à¤•-à¤…à¤ª à¤¶à¥à¤°à¥‚ à¤•à¤°à¤¤à¥‡ à¤¹à¥ˆà¤‚à¥¤ à¤†à¤ªà¤•à¤¾ application number à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
   }
   if (contains("application number")) return "à¤†à¤ªà¤•à¤¾ application number à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
   if (contains("nominee") && contains("date", "birth")) return "Nominee à¤•à¥€ date of birth à¤•à¥à¤¯à¤¾ à¤¹à¥ˆ?";
@@ -3539,6 +3579,41 @@ const sanitizeKycReasonDuration = (value) => {
     .replace(/\s+/g, " ")
     .trim();
   return hasDurationPhrase(cleaned) ? cleaned : "";
+};
+
+const isLikelyPartialDurationFragment = (value) => {
+  const normalized = normalizeIndicSpeechText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return false;
+  return (
+    /^(?:for|from|since|past)$/.test(normalized) ||
+    /^(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)$/.test(normalized) ||
+    /^(?:days?|weeks?|months?|years?|din|hafte|mahine|saal)$/.test(normalized) ||
+    /^(?:(?:for|from|since)\s+)?(?:past\s+)?(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)$/.test(normalized) ||
+    /^(?:past\s+)?(?:days?|weeks?|months?|years?|din|hafte|mahine|saal)$/.test(normalized)
+  );
+};
+
+const getTrailingDurationFragment = (value) => {
+  const normalized = normalizeIndicSpeechText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const match = normalized.match(/\b((?:for|from|since)\s+past|(?:for|from|since|past))$/);
+  return match?.[1] || "";
+};
+
+const extractDiagnosticDetailFromTimingPrompt = (value) => {
+  const text = normalizeTranscriptEncoding(value);
+  const match = text.match(/\bwhen\s+(?:was|were)\s+(?:the\s+)?(.+?)\s+(?:done|advised|done\s+or\s+advised)\b/i);
+  if (!match?.[1]) return "";
+  return normalizeCommonReasonForPdf(match[1])
+    .replace(/\s+/g, " ")
+    .trim();
 };
 
 const isAcknowledgedNextKycPrompt = (text) => {
@@ -4324,11 +4399,11 @@ const getAgentClarificationMode = (text) => {
   }
 
   if (
-    /\b(could you (repeat|say that again|spell|spell that|spell it out)|can you (repeat|say that again|spell)|please repeat|please spell|i (didn't|did not|couldn't|could not) catch|say that again|repeat that)\b/i.test(
+    /\b(could you (?:please\s+)?(?:repeat|say that again|spell|spell that|spell it out|spell your|spell the)|can you (?:please\s+)?(?:repeat|say that again|spell)|please repeat|please spell|spell\b.*\bname|i (didn't|did not|couldn't|could not) catch|say that again|repeat that)\b/i.test(
       normalized,
     )
     ||
-    /\b(complete the (date|year)|full date including|including (the )?day,? month,? and year|including day,? month,? and year)\b/i.test(
+    /\b(complete the (date|year)|confirm the year|year once more|confirm.*year|full date including|including (the )?day,? month,? and year|including day,? month,? and year)\b/i.test(
       normalized,
     )
   ) {
@@ -4680,14 +4755,31 @@ const markSkippedFieldsAsUncaptured = (
   responses = {},
   fromIndex = 0,
   toIndex = 0,
+  recentUserAnswer = null,
 ) => {
   const updated = { ...responses };
   let changed = false;
+  const firstSkippedIndex = Math.max(0, fromIndex);
+  const recentAnswerText = String(recentUserAnswer?.text || "").trim();
+  const recentAnswerAgeMs = recentUserAnswer?.timestamp
+    ? Date.now() - recentUserAnswer.timestamp
+    : Number.POSITIVE_INFINITY;
+  const recentNoAnswer =
+    recentAnswerText &&
+    recentAnswerAgeMs >= 0 &&
+    recentAnswerAgeMs < 15000 &&
+    parseYesNoAnswer(recentAnswerText) === "No";
 
-  for (let index = Math.max(0, fromIndex); index < Math.min(toIndex, fields.length); index += 1) {
+  for (let index = firstSkippedIndex; index < Math.min(toIndex, fields.length); index += 1) {
     const field = fields[index];
     if (!field || shouldSkipFieldForGender(field, updated)) continue;
     if (!isKycFieldComplete(field, updated)) {
+      if (index === firstSkippedIndex && recentNoAnswer && isYesNoField(field)) {
+        updated[field.id] = "No";
+        if (field.reasonResponseId) updated[field.reasonResponseId] = "";
+        changed = true;
+        continue;
+      }
       updated[field.id] = KYC_UNCAPTURED_VALUE;
       if (field.reasonResponseId) updated[field.reasonResponseId] = "";
       changed = true;
@@ -6652,6 +6744,8 @@ const CarelyAIAssistant = () => {
   const pendingClarificationTargetRef = useRef(null);
   const pendingReasonFieldRef = useRef(null);
   const pendingNameSpellingRef = useRef(null);
+  const pendingDurationFragmentRef = useRef(null);
+  const lastUserTranscriptRef = useRef(null);
   const recentReasonCarryoverRef = useRef(null);
   const ignoredAgentFollowUpRef = useRef(null);
   const transcriptHandlerRefs = useRef({ onUser: null, onAgent: null });
@@ -7311,7 +7405,7 @@ const CarelyAIAssistant = () => {
       ctx.fillStyle = "#a7f3d0";
       ctx.font = "600 24px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Dr. Tara", avatarTileX + avatarTileWidth / 2, avatarTileY + avatarTileHeight / 2);
+      ctx.fillText("Agent Tara", avatarTileX + avatarTileWidth / 2, avatarTileY + avatarTileHeight / 2);
     }
 
     ctx.fillStyle = "rgba(15,23,42,0.78)";
@@ -7322,7 +7416,7 @@ const CarelyAIAssistant = () => {
     ctx.textAlign = "left";
     ctx.fillText("Client", 24, height - 15);
     ctx.font = "700 16px sans-serif";
-    ctx.fillText("Dr. Tara", avatarTileX + 12, avatarTileY + avatarTileHeight - 12);
+    ctx.fillText("Agent Tara", avatarTileX + 12, avatarTileY + avatarTileHeight - 12);
 
     if (isRecordingCall) {
       ctx.fillStyle = "#ef6547";
@@ -7925,6 +8019,10 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       transcriptSource === "livekit_transcription_fallback";
     let transcriptWasRecorded = false;
     const now = Date.now();
+    lastUserTranscriptRef.current = {
+      text: cleanText,
+      timestamp: now,
+    };
     if (kycTurnLockRef.current || kycCompleteRef.current) return;
     const activeIndex = kycCurrentFieldIndexRef.current;
     if (activeIndex >= kycFields.length) return;
@@ -7990,7 +8088,8 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     }
     if (
       !pendingReason &&
-      !(pendingClarification && now - pendingClarification.timestamp < 15000) &&
+      !(pendingClarification && now - pendingClarification.timestamp < 45000) &&
+      !(pendingNameSpellingRef.current && now - pendingNameSpellingRef.current.timestamp < 45000) &&
       ignoredAgentFollowUpRef.current &&
       now - ignoredAgentFollowUpRef.current.timestamp < 20000
     ) {
@@ -8025,7 +8124,7 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         ? recentAskedField
         : null;
     const hasFreshClarification =
-      !pendingReason && pendingClarification && now - pendingClarification.timestamp < 15000;
+      !pendingReason && pendingClarification && now - pendingClarification.timestamp < 45000;
     let targetFieldIndex = pendingReason
       ? pendingReason.index
       : hasFreshClarification
@@ -8070,6 +8169,33 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         ) {
           targetFieldIndex = recentCommitted.index;
         }
+      }
+      if (
+        committedField &&
+        isFullNameField(committedField) &&
+        targetFieldIndex > recentCommitted.index &&
+        now - recentCommitted.timestamp < 12000
+      ) {
+        const lateName = formatNameForPdf(cleanText);
+        const currentName = formatNameForPdf(currentResponses[committedField.id]);
+        if (
+          looksLikeValidKycName(lateName) &&
+          compactNameLetters(lateName).startsWith(
+            compactNameLetters(currentName).slice(0, 5),
+          ) &&
+          compactNameLetters(lateName).length >= compactNameLetters(currentName).length
+        ) {
+          targetFieldIndex = recentCommitted.index;
+        }
+      }
+      if (
+        committedField &&
+        isPhoneKycField(committedField) &&
+        targetFieldIndex > recentCommitted.index &&
+        now - recentCommitted.timestamp < 20000 &&
+        getPhoneDigitsForKyc(cleanText).length >= 6
+      ) {
+        targetFieldIndex = recentCommitted.index;
       }
     }
     const answerMode =
@@ -8209,6 +8335,32 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
               timestamp: now,
             };
           }
+          if (
+            activeSpelling &&
+            isFullNameField(targetField) &&
+            !looksLikeCompleteFullName(correctionText)
+          ) {
+            pendingClarificationTargetRef.current = {
+              ...pendingClarification,
+              timestamp: now,
+            };
+            lastAnswerTimestampRef.current = now;
+            return;
+          }
+          if (
+            activeSpelling &&
+            isFullNameField(targetField) &&
+            hasMeaningfulKycValue(currentResponses[targetField.id]) &&
+            !isSpelledNameSafeCorrection(
+              currentResponses[targetField.id],
+              correctionText,
+            )
+          ) {
+            pendingClarificationTargetRef.current = null;
+            pendingNameSpellingRef.current = null;
+            lastAnswerTimestampRef.current = now;
+            return;
+          }
           if (!isLocallyPlausibleKycAnswerForField(targetField, correctionText)) {
             console.log("Implausible correction ignored:", correctionText, targetField.id);
             return;
@@ -8345,12 +8497,23 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       pendingClarificationTargetRef.current = null;
     }
 
-    if (!pendingReason && now - lastAnswerTimestampRef.current < ANSWER_COOLDOWN_MS) {
+    const cooldownField = kycFields[targetFieldIndex];
+    const shouldBypassCooldownForPartial =
+      cooldownField &&
+      ((isPhoneKycField(cooldownField) &&
+        !isCompleteKycPhoneFieldValue(cooldownField, currentResponses[cooldownField.id])) ||
+        (isFullNameField(cooldownField) &&
+          pendingNameSpellingRef.current?.index === targetFieldIndex));
+    if (
+      !pendingReason &&
+      !shouldBypassCooldownForPartial &&
+      now - lastAnswerTimestampRef.current < ANSWER_COOLDOWN_MS
+    ) {
       console.log('Cooldown active, skipping:', cleanText);
       return;
     }
 
-    const currentField = kycFields[targetFieldIndex];
+    const currentField = cooldownField;
     if (!currentField) return;
 
     if (isLikelyFiller(cleanText, currentField)) {
@@ -8363,10 +8526,27 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       const awaitingReason = isKycFieldAwaitingReason(currentField, currentResponses);
 
       if (awaitingReason) {
+        const isDurationReasonPhase = (pendingReason?.phase || "detail") === "duration";
+        const previousDurationFragment =
+          pendingDurationFragmentRef.current &&
+          pendingDurationFragmentRef.current.fieldId === currentField.id &&
+          now - pendingDurationFragmentRef.current.timestamp < 20000
+            ? pendingDurationFragmentRef.current.text
+            : "";
+        const durationCandidateText =
+          isDurationReasonPhase && previousDurationFragment
+            ? `${previousDurationFragment} ${cleanText}`.trim()
+            : cleanText;
+        const isPartialDuration =
+          isDurationReasonPhase &&
+          isLikelyPartialDurationFragment(cleanText) &&
+          !hasDurationPhrase(durationCandidateText);
         const isRelevantReason =
           hasMeaningfulKycValue(cleanText) &&
           !isLikelyFiller(cleanText, currentField) &&
-          !isLikelyNonReasonAnswerForField(currentField.id, cleanText);
+          (!isLikelyNonReasonAnswerForField(currentField.id, cleanText) ||
+            isPartialDuration ||
+            (isDurationReasonPhase && hasDurationPhrase(durationCandidateText)));
         if (!isRelevantReason) {
           console.log("Irrelevant reason answer ignored:", cleanText, currentField.id);
           hideKycTranscriptMessage("user", cleanText, options);
@@ -8390,14 +8570,33 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
           currentField.id,
           normalizedReason,
         );
-        const isDurationReasonPhase = (pendingReason?.phase || "detail") === "duration";
         const durationReason = isDurationReasonPhase
-          ? sanitizeKycReasonDuration(reasonNormalized.englishText || cleanText)
+          ? sanitizeKycReasonDuration(durationCandidateText)
           : "";
         const effectiveReason =
           isDurationReasonPhase && hasMeaningfulKycValue(durationReason)
             ? durationReason
             : sanitizedReason;
+        if (
+          isDurationReasonPhase &&
+          !hasMeaningfulKycValue(effectiveReason) &&
+          isLikelyPartialDurationFragment(cleanText)
+        ) {
+          pendingDurationFragmentRef.current = {
+            fieldId: currentField.id,
+            text: durationCandidateText,
+            timestamp: now,
+          };
+          pendingReasonFieldRef.current = {
+            ...(pendingReason || {}),
+            index: targetFieldIndex,
+            fieldId: currentField.id,
+            phase: "duration",
+            timestamp: now,
+          };
+          hideKycTranscriptMessage("user", cleanText, options);
+          return;
+        }
         if (!hasMeaningfulKycValue(effectiveReason)) {
           hideKycTranscriptMessage("user", cleanText, options);
           await promptForPendingKycReason(
@@ -8479,6 +8678,47 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
           return;
         }
 
+        if (
+          isDurationReasonPhase &&
+          !hasMeaningfulKycValue(durationReason) &&
+          !hasDurationPhrase(cleanText)
+        ) {
+          const refinedDetail =
+            combineKycReasonParts(pendingReason?.detail, sanitizedReason) ||
+            sanitizedReason ||
+            pendingReason?.detail ||
+            "";
+          const nextResponses = {
+            ...currentResponses,
+            [currentField.reasonResponseId]: refinedDetail,
+          };
+          kycResponsesRef.current = nextResponses;
+          setKycResponses(nextResponses);
+          const trailingDurationFragment = getTrailingDurationFragment(cleanText);
+          if (trailingDurationFragment) {
+            pendingDurationFragmentRef.current = {
+              fieldId: currentField.id,
+              text: trailingDurationFragment,
+              timestamp: now,
+            };
+          }
+          pendingReasonFieldRef.current = {
+            index: targetFieldIndex,
+            fieldId: currentField.id,
+            phase: "duration",
+            detail: refinedDetail,
+            timestamp: now,
+          };
+          hideKycTranscriptMessage("user", cleanText, options);
+          await promptForPendingKycReason(
+            currentField,
+            "duration",
+            refinedDetail,
+          );
+          lastAnswerTimestampRef.current = Date.now();
+          return;
+        }
+
         const combinedReason = combineKycReasonParts(
           pendingReason?.detail,
           sanitizedReason,
@@ -8486,11 +8726,17 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
 
         const nextResponses = {
           ...currentResponses,
-          [currentField.reasonResponseId]: combinedReason || sanitizedReason,
+          [currentField.reasonResponseId]: isDurationReasonPhase
+            ? combineKycReasonParts(
+                pendingReason?.detail,
+                durationReason || sanitizedReason,
+              )
+            : combinedReason || sanitizedReason,
         };
         kycResponsesRef.current = nextResponses;
         setKycResponses(nextResponses);
         pendingReasonFieldRef.current = null;
+        pendingDurationFragmentRef.current = null;
         lastCommittedFieldRef.current = {
           index: targetFieldIndex,
           fieldId: currentField.id,
@@ -8511,6 +8757,39 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         currentResponses[currentField.id],
         cleanText,
       );
+      if (isPhoneKycField(currentField)) {
+        const phoneText = combinePhoneTranscriptAnswer(
+          currentResponses[currentField.id],
+          cleanText,
+        );
+        if (!isLocallyPlausibleKycAnswerForField(currentField, phoneText)) {
+          console.log("Implausible phone answer ignored:", phoneText, currentField.id);
+          hideKycTranscriptMessage("user", cleanText, options);
+          return;
+        }
+        const formattedPhone = formatKycAnswerForPdf(currentField, phoneText);
+        const nextResponses = {
+          ...currentResponses,
+          [currentField.id]: formattedPhone,
+        };
+        kycResponsesRef.current = nextResponses;
+        setKycResponses(nextResponses);
+        lastCommittedFieldRef.current = {
+          index: targetFieldIndex,
+          fieldId: currentField.id,
+          timestamp: Date.now(),
+        };
+        lastCommittedTranscriptRef.current = {
+          normalizedText: normalizedCleanText,
+          agentTurn: agentTranscriptTurnRef.current,
+          timestamp: Date.now(),
+        };
+        lastAnswerTimestampRef.current = Date.now();
+        if (isCompleteKycPhoneFieldValue(currentField, formattedPhone)) {
+          advanceKycToNextPendingField(nextResponses, targetFieldIndex + 1);
+        }
+        return;
+      }
       if (currentField.id === "habits_addictions") {
         const yesNo = parseYesNoAnswer(answerText);
         if (yesNo === "Yes") {
@@ -8773,6 +9052,15 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         lastCommitted,
       );
 
+      const promptedIndex = promptedField
+        ? kycFields.findIndex((field) => field.id === promptedField.id)
+        : -1;
+      if (promptedIndex >= 0) {
+        if (matchedFieldIndex < 0 || promptedField.id === "all_ci_cover") {
+          matchedFieldIndex = promptedIndex;
+        }
+      }
+
       if (
         matchedFieldIndex < 0 &&
         activeField &&
@@ -8791,9 +9079,38 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       }
 
       if (
+        activeField?.id === "diagnostic_tests" &&
+        matchedFieldIndex === activeIndex &&
+        /when\s+(?:was|were)\b/i.test(cleanText)
+      ) {
+        const diagnosticDetail = extractDiagnosticDetailFromTimingPrompt(cleanText);
+        if (hasMeaningfulKycValue(diagnosticDetail)) {
+          const updatedResponses = {
+            ...kycResponsesRef.current,
+            diagnostic_tests: "Yes",
+            diagnostic_tests_reason:
+              kycResponsesRef.current.diagnostic_tests_reason ||
+              diagnosticDetail,
+          };
+          kycResponsesRef.current = updatedResponses;
+          setKycResponses(updatedResponses);
+          pendingReasonFieldRef.current = {
+            index: activeIndex,
+            fieldId: activeField.id,
+            phase: "duration",
+            detail: updatedResponses.diagnostic_tests_reason,
+            timestamp: now,
+          };
+        }
+      }
+
+      const isExplicitCriticalIllnessPrompt =
+        promptedField?.id === "all_ci_cover" && matchedFieldIndex === promptedIndex;
+      if (
         matchedFieldIndex >= 0 &&
         matchedFieldIndex < activeIndex &&
         !activeFieldAwaitingReason &&
+        !isExplicitCriticalIllnessPrompt &&
         isKycFieldComplete(kycFields[matchedFieldIndex], kycResponsesRef.current)
       ) {
         ignoredAgentFollowUpRef.current = {
@@ -8805,6 +9122,45 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       }
     }
 
+    let blockingReasonField =
+      matchedFieldIndex > 0
+        ? getBlockingIncompleteReasonFieldBeforePrompt(
+            kycFields,
+            kycResponsesRef.current,
+            matchedFieldIndex,
+          )
+        : null;
+    if (
+      blockingReasonField?.phase === "duration" &&
+      commitRecentDurationForField(
+        blockingReasonField.field,
+        blockingReasonField.index,
+        blockingReasonField.detail,
+      )
+    ) {
+      blockingReasonField = null;
+    }
+    if (blockingReasonField) {
+      const { field, index, phase, detail } = blockingReasonField;
+      kycCurrentFieldIndexRef.current = index;
+      setKycCurrentFieldIndex(index);
+      pendingReasonFieldRef.current = {
+        index,
+        fieldId: field.id,
+        phase,
+        detail,
+        timestamp: now,
+      };
+      console.log(
+        "[KYC] Held incomplete reason before next prompt:",
+        field.id,
+        "->",
+        kycFields[matchedFieldIndex]?.id,
+      );
+      await promptForPendingKycReason(field, phase, detail);
+      return;
+    }
+
     if (
       activeFieldAwaitingReason &&
       matchedFieldIndex > activeIndex &&
@@ -8813,6 +9169,20 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         pendingReasonFieldRef.current,
       )
     ) {
+      if (
+        (pendingReasonFieldRef.current?.phase === "duration" ||
+          (activeField?.reasonResponseId &&
+            hasMeaningfulKycValue(kycResponsesRef.current[activeField.reasonResponseId]))) &&
+        commitRecentDurationForField(
+          activeField,
+          activeIndex,
+          pendingReasonFieldRef.current?.detail ||
+            kycResponsesRef.current[activeField.reasonResponseId] ||
+            "",
+        )
+      ) {
+        pendingReasonFieldRef.current = null;
+      } else {
       const jumpedField = kycFields[matchedFieldIndex];
       if (shouldResyncAfterMissedRequiredFollowUp(activeField, jumpedField)) {
         const updatedResponses = { ...kycResponsesRef.current };
@@ -8844,6 +9214,7 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         pendingReasonFieldRef.current?.detail || "",
       );
       return;
+      }
       }
     }
 
@@ -8924,10 +9295,25 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
 
     agentTranscriptTurnRef.current += 1;
 
-    const clarificationTargetIndex =
+    let clarificationTargetIndex =
       matchedFieldIndex >= 0 ? matchedFieldIndex : lastCommitted?.index;
-    const clarificationTargetField =
+    let clarificationTargetField =
       clarificationTargetIndex != null ? kycFields[clarificationTargetIndex] : null;
+    if (
+      clarificationMode === "clarify" &&
+      /\bspell\b/i.test(cleanText) &&
+      /\bname\b/i.test(cleanText) &&
+      !isFullNameField(clarificationTargetField)
+    ) {
+      const recentNameIndex = [...kycFields.keys()]
+        .filter((idx) => idx <= activeIndex && isFullNameField(kycFields[idx]))
+        .reverse()
+        .find((idx) => hasMeaningfulKycValue(kycResponsesRef.current[kycFields[idx].id]));
+      if (recentNameIndex != null) {
+        clarificationTargetIndex = recentNameIndex;
+        clarificationTargetField = kycFields[recentNameIndex];
+      }
+    }
     const clarificationTargetsCompletedPastField =
       clarificationTargetIndex != null &&
       clarificationTargetIndex < kycCurrentFieldIndexRef.current &&
@@ -8946,7 +9332,10 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       (!clarificationTargetsCompletedPastField || clarificationShouldUpdateCompletedName) &&
       (
         matchedFieldIndex >= 0 ||
-        (lastCommitted && Date.now() - lastCommitted.timestamp < 20000)
+        (lastCommitted && Date.now() - lastCommitted.timestamp < 20000) ||
+        (clarificationMode === "clarify" &&
+          isFullNameField(clarificationTargetField) &&
+          /\bspell\b/i.test(cleanText))
       )
     ) {
       pendingClarificationTargetRef.current = {
@@ -9004,13 +9393,17 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
       kycFields[matchedFieldIndex],
       kycResponsesRef.current
     );
-    if (!wouldGoBackwards || !targetAlreadyComplete) {
+    const allowExplicitCriticalIllnessReopen =
+      promptedField?.id === "all_ci_cover" &&
+      matchedFieldIndex === kycFields.findIndex((field) => field.id === "all_ci_cover");
+    if (!wouldGoBackwards || !targetAlreadyComplete || allowExplicitCriticalIllnessReopen) {
       if (matchedFieldIndex > kycCurrentFieldIndexRef.current) {
         const skippedResult = markSkippedFieldsAsUncaptured(
           kycFields,
           kycResponsesRef.current,
           kycCurrentFieldIndexRef.current,
           matchedFieldIndex,
+          lastUserTranscriptRef.current,
         );
         if (skippedResult.changed) {
           kycResponsesRef.current = skippedResult.responses;
@@ -9200,6 +9593,8 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
     const repromptEnglish =
       phase === "duration"
         ? getKycReasonFollowUpPrompt(field, "duration", detail)
+        : field?.id === "diagnostic_tests"
+        ? getKycReasonFollowUpPrompt(field, "detail", detail)
         : "Please tell me the actual condition or reason, not only yes or no.";
     try {
       const reprompt = await localizeKycText(repromptEnglish, preferredLanguage);
@@ -9214,6 +9609,52 @@ const hideKycTranscriptMessage = (role, text, options = {}) => {
         { role: "assistant", content: repromptEnglish },
       ]);
     }
+  };
+
+  const commitRecentDurationForField = (field, index, detail = "") => {
+    if (!field?.reasonResponseId) return false;
+    const recentUser = lastUserTranscriptRef.current;
+    if (!recentUser || Date.now() - recentUser.timestamp > 25000) return false;
+    const recentText = recentUser.text || "";
+    const pendingFragment =
+      pendingDurationFragmentRef.current?.fieldId === field.id &&
+      Date.now() - pendingDurationFragmentRef.current.timestamp < 25000
+        ? pendingDurationFragmentRef.current.text
+        : "";
+        const durationText = pendingFragment
+      ? normalize(recentText).startsWith(normalize(pendingFragment))
+        ? recentText
+        : `${pendingFragment} ${recentText}`.trim()
+      : recentText;
+    const duration = sanitizeKycReasonDuration(durationText);
+    if (!hasMeaningfulKycValue(duration)) return false;
+    const existingDetail =
+      detail ||
+      kycResponsesRef.current[field.reasonResponseId] ||
+      "";
+    if (!hasMeaningfulKycValue(existingDetail)) return false;
+    const updatedResponses = {
+      ...kycResponsesRef.current,
+      [field.id]: "Yes",
+      [field.reasonResponseId]: combineKycReasonParts(existingDetail, duration),
+    };
+    kycResponsesRef.current = updatedResponses;
+    setKycResponses(updatedResponses);
+    pendingReasonFieldRef.current = null;
+    pendingDurationFragmentRef.current = null;
+    lastCommittedFieldRef.current = {
+      index,
+      fieldId: field.id,
+      timestamp: Date.now(),
+    };
+    lastCommittedTranscriptRef.current = {
+      normalizedText: normalize(recentText),
+      agentTurn: agentTranscriptTurnRef.current,
+      timestamp: Date.now(),
+    };
+    lastAnswerTimestampRef.current = Date.now();
+    console.log("[KYC] Committed recent duration before next prompt:", field.id, duration);
+    return true;
   };
 
   const normalizeKycAnswerForPdf = async (
@@ -11083,6 +11524,9 @@ Respond ONLY with valid JSON in this exact format:
     agentTranscriptTurnRef.current = 0;
     pendingClarificationTargetRef.current = null;
     pendingReasonFieldRef.current = null;
+    pendingNameSpellingRef.current = null;
+    pendingDurationFragmentRef.current = null;
+    lastUserTranscriptRef.current = null;
     ignoredAgentFollowUpRef.current = null;
     kycCurrentFieldIndexRef.current = 0;
     kycCompleteRef.current = false;
@@ -11166,10 +11610,27 @@ Respond ONLY with valid JSON in this exact format:
         isKycFieldAwaitingReason(currentField, currentResponses);
 
       if (awaitingReason) {
+        const isDurationReasonPhase = (pendingReason?.phase || "detail") === "duration";
+        const previousDurationFragment =
+          pendingDurationFragmentRef.current &&
+          pendingDurationFragmentRef.current.fieldId === currentField.id &&
+          Date.now() - pendingDurationFragmentRef.current.timestamp < 20000
+            ? pendingDurationFragmentRef.current.text
+            : "";
+        const durationCandidateText =
+          isDurationReasonPhase && previousDurationFragment
+            ? `${previousDurationFragment} ${cleanUserMessage}`.trim()
+            : cleanUserMessage;
+        const isPartialDuration =
+          isDurationReasonPhase &&
+          isLikelyPartialDurationFragment(cleanUserMessage) &&
+          !hasDurationPhrase(durationCandidateText);
         const isRelevantReason =
           hasMeaningfulKycValue(cleanUserMessage) &&
           !isLikelyFiller(cleanUserMessage, currentField) &&
-          !isLikelyNonReasonAnswerForField(currentField.id, cleanUserMessage);
+          (!isLikelyNonReasonAnswerForField(currentField.id, cleanUserMessage) ||
+            isPartialDuration ||
+            (isDurationReasonPhase && hasDurationPhrase(durationCandidateText)));
         if (!isRelevantReason) {
           await promptForPendingKycReason(
             currentField,
@@ -11196,14 +11657,33 @@ Respond ONLY with valid JSON in this exact format:
           currentField.id,
           normalizedReason,
         );
-        const isDurationReasonPhase = (pendingReason?.phase || "detail") === "duration";
         const durationReason = isDurationReasonPhase
-          ? sanitizeKycReasonDuration(reasonNormalized.englishText || cleanUserMessage)
+          ? sanitizeKycReasonDuration(durationCandidateText)
           : "";
         const effectiveReason =
           isDurationReasonPhase && hasMeaningfulKycValue(durationReason)
             ? durationReason
             : sanitizedReason;
+        if (
+          isDurationReasonPhase &&
+          !hasMeaningfulKycValue(effectiveReason) &&
+          isLikelyPartialDurationFragment(cleanUserMessage)
+        ) {
+          pendingDurationFragmentRef.current = {
+            fieldId: currentField.id,
+            text: durationCandidateText,
+            timestamp: Date.now(),
+          };
+          pendingReasonFieldRef.current = {
+            ...(pendingReason || {}),
+            index: currentIndex,
+            fieldId: currentField.id,
+            phase: "duration",
+            timestamp: Date.now(),
+          };
+          setIsKycLoading(false);
+          return;
+        }
         if (!hasMeaningfulKycValue(effectiveReason)) {
           await promptForPendingKycReason(
             currentField,
@@ -11358,7 +11838,7 @@ Respond ONLY with valid JSON in this exact format:
 
         const combinedReason = combineKycReasonParts(
           pendingReason?.detail,
-          effectiveReason,
+          isDurationReasonPhase ? durationReason || effectiveReason : effectiveReason,
         );
 
         const nextResponses = {
@@ -11368,6 +11848,7 @@ Respond ONLY with valid JSON in this exact format:
        kycResponsesRef.current = nextResponses;
 setKycResponses(nextResponses);
 pendingReasonFieldRef.current = null;
+pendingDurationFragmentRef.current = null;
 recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage).slice(0, 120)}`, Date.now());
         const nextIndex = findNextUnskippedFieldIndex(
           kycFields,
@@ -12736,7 +13217,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         margin: 0,
                       }}
                     >
-                      The FMR form loads automatically. Dr. Tara will
+                      The FMR form loads automatically. Agent Tara will
                       guide you through the full medical examination report.
                     </p>
                   </div>
@@ -12753,8 +13234,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                       <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.8)]" />
                     )}
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-bold sm:text-base">Dr. Tara</div>
-                      <div className="text-[11px] font-semibold text-white/55">Carely Health</div>
+                      <div className="truncate text-sm font-bold sm:text-base">Agent Tara</div>
                     </div>
                   </div>
                   <div className="kyc-call-actions flex flex-wrap items-center justify-end gap-2">
@@ -12975,7 +13455,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           isMuted={isMuted}
                         />
                         <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-bold">
-                          Dr. Tara
+                          Agent Tara
                         </div>
                       </div>
                     </div>
@@ -13081,7 +13561,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           isMuted={isMuted}
                         />
                         <div className="pointer-events-none absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-3 py-2 text-xs font-bold">
-                          Dr. Tara
+                          Agent Tara
                         </div>
                       </div>
                     </div>
@@ -13156,7 +13636,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                           lineHeight: 1.6,
                         }}
                       >
-                        Connect with Dr. Tara for your EMR verification
+                        Connect with our AI Doctor for your MER Verification
                       </p>
                     </div>
                   )}
@@ -13262,7 +13742,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         buildVisibleTranscriptEntries(kycChatMessages, preferredLanguage).map((msg, index) => (
                           <div key={`${msg.role}-${index}-${String(msg.content || "").slice(0, 24)}`} className="rounded-2xl bg-white/[0.08] p-3">
                             <div className={msg.role === "user" ? "text-xs font-bold text-sky-300" : "text-xs font-bold text-emerald-300"}>
-                              {msg.role === "user" ? "Client" : "Dr. Tara"}
+                              {msg.role === "user" ? "Client" : "Agent Tara"}
                             </div>
                             <div className="mt-1 text-slate-100">{msg.text}</div>
                           </div>
@@ -13282,9 +13762,9 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                     <div className="border-b border-white/10 px-4 py-3 text-sm font-bold">People</div>
                     <div className="space-y-3 p-4 text-sm">
                       <div className="flex items-center gap-3 rounded-2xl bg-white/[0.08] p-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/20 font-bold text-emerald-200">DT</div>
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400/20 font-bold text-emerald-200">AT</div>
                         <div>
-                          <div className="font-bold">Dr. Tara</div>
+                          <div className="font-bold">Agent Tara</div>
                           <div className="text-xs text-slate-400">Beyond Presence avatar</div>
                         </div>
                       </div>
