@@ -6221,7 +6221,13 @@ const KycImageCapture = ({
         await videoRef.current.play();
       }
       autoCaptureStartedAtRef.current = Date.now();
-      setStatus(autoCapture ? "Hold steady. Auto-capture will run when the image is clear." : "");
+      setStatus(
+        autoCapture
+          ? getCapturePrepMessage(
+              captureType === "id" ? 8 : captureType === "fullBody" ? 7 : 2,
+            )
+          : "",
+      );
     } catch (err) {
       setStatus(err.message || "Could not start camera. Please upload a photo.");
     } finally {
@@ -6340,13 +6346,13 @@ const KycImageCapture = ({
     }
     background /= Math.max(1, backgroundCount);
 
-    const centerMinX = Math.floor(sampleWidth * 0.33);
-    const centerMaxX = Math.ceil(sampleWidth * 0.67);
+    const centerMinX = Math.floor(sampleWidth * 0.28);
+    const centerMaxX = Math.ceil(sampleWidth * 0.72);
     const bands = [
-      [0.18, 0.42],
-      [0.42, 0.68],
-      [0.68, 0.94],
-      [0.82, 0.99],
+      [0.12, 0.34],
+      [0.34, 0.62],
+      [0.62, 0.86],
+      [0.84, 0.99],
     ];
 
     return bands.map(([from, to]) => {
@@ -6366,20 +6372,123 @@ const KycImageCapture = ({
     });
   };
 
+  const getCapturePrepMessage = (secondsLeft) =>
+    captureType === "id"
+      ? `Get your PAN or Aadhaar card ready. Place the full card inside the guide. Checking in ${secondsLeft}s.`
+      : `Step back and stand centered with head and feet visible. Checking in ${secondsLeft}s.`;
+
+  const getCaptureGuideRect = (canvas, type = captureType) => {
+    if (type === "id") {
+      const guideWidth = Math.round(canvas.width * 0.58);
+      const guideHeight = Math.round(canvas.height * 0.42);
+      return {
+        x: Math.round((canvas.width - guideWidth) / 2),
+        y: Math.round((canvas.height - guideHeight) / 2),
+        width: guideWidth,
+        height: guideHeight,
+      };
+    }
+
+    if (type === "fullBody") {
+      const guideWidth = Math.round(canvas.width * 0.4);
+      const guideHeight = Math.round(canvas.height * 0.82);
+      return {
+        x: Math.round((canvas.width - guideWidth) / 2),
+        y: Math.round((canvas.height - guideHeight) / 2),
+        width: guideWidth,
+        height: guideHeight,
+      };
+    }
+
+    return { x: 0, y: 0, width: canvas.width, height: canvas.height };
+  };
+
+  const cropCanvasToRect = (canvas, rect) => {
+    const cropCanvas = document.createElement("canvas");
+    cropCanvas.width = rect.width;
+    cropCanvas.height = rect.height;
+    cropCanvas
+      .getContext("2d")
+      .drawImage(
+        canvas,
+        rect.x,
+        rect.y,
+        rect.width,
+        rect.height,
+        0,
+        0,
+        rect.width,
+        rect.height,
+      );
+    return cropCanvas;
+  };
+
+  const getIdGuideCanvas = (canvas) => {
+    const guideRect = getCaptureGuideRect(canvas, "id");
+    const guideCanvas = cropCanvasToRect(canvas, guideRect);
+    return guideCanvas;
+  };
+
+  const getCaptureOutputCanvas = (canvas) => {
+    if (captureType !== "id") return canvas;
+    return cropCanvasToRect(canvas, getCaptureGuideRect(canvas, captureType));
+  };
+
+  const getBrightDocumentBounds = ({ pixels, sampleWidth, sampleHeight, brightness }) => {
+    const threshold = Math.max(95, brightness + 4);
+    let minX = sampleWidth;
+    let minY = sampleHeight;
+    let maxX = 0;
+    let maxY = 0;
+    let count = 0;
+
+    for (let y = 0; y < sampleHeight; y += 1) {
+      for (let x = 0; x < sampleWidth; x += 1) {
+        const index = (y * sampleWidth + x) * 4;
+        const red = pixels[index];
+        const green = pixels[index + 1];
+        const blue = pixels[index + 2];
+        const luma = red * 0.299 + green * 0.587 + blue * 0.114;
+        const colorSpread = Math.max(red, green, blue) - Math.min(red, green, blue);
+        if (luma < threshold || colorSpread > 145) continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+        count += 1;
+      }
+    }
+
+    if (!count) return null;
+    return {
+      xRatio: minX / sampleWidth,
+      yRatio: minY / sampleHeight,
+      widthRatio: (maxX - minX + 1) / sampleWidth,
+      heightRatio: (maxY - minY + 1) / sampleHeight,
+      coverageRatio: count / (sampleWidth * sampleHeight),
+    };
+  };
+
   const checkImageQuality = (canvas) => {
-    const metrics = analyzeCanvasQuality(canvas);
-    if (metrics.width < 640 || metrics.height < 480) {
+    const analysisCanvas = captureType === "id" ? getIdGuideCanvas(canvas) : canvas;
+    const metrics = analyzeCanvasQuality(analysisCanvas);
+    if (canvas.width < 640 || canvas.height < 480) {
       return "The picture is too small. Please move closer and retake it.";
     }
 
-    if (captureType === "id" && metrics.width < 960) {
-      return "Move closer to the ID card so the text is readable.";
-    }
     if (metrics.brightness < 45) return "The picture is too dark. Please use more light.";
     if (metrics.brightness > 235) return "The picture is overexposed. Please reduce glare and retake it.";
     if (metrics.glareRatio > 0.08) return "Too much glare is visible. Tilt slightly and retake it.";
-    const minimumContrast = captureType === "fullBody" ? 7 : 16;
-    const minimumSharpness = captureType === "fullBody" ? 3.5 : 9;
+
+    if (captureType === "id") {
+      const bounds = getBrightDocumentBounds(metrics) || getForegroundBounds(metrics);
+      if (!bounds || bounds.coverageRatio < 0.035 || bounds.widthRatio < 0.35 || bounds.heightRatio < 0.14) {
+        return "Show the ID card inside the guide area before capture.";
+      }
+    }
+
+    const minimumContrast = captureType === "fullBody" ? 6 : captureType === "id" ? 10 : 16;
+    const minimumSharpness = captureType === "fullBody" ? 3 : captureType === "id" ? 6.5 : 9;
     if (metrics.contrast < minimumContrast || metrics.sharpness < minimumSharpness) {
       return "The picture is not clear enough. Please hold steady and retake it.";
     }
@@ -6392,11 +6501,11 @@ const KycImageCapture = ({
       if (bounds.coverageRatio < 0.02) {
         return "Stand fully inside the frame before capturing.";
       }
-      if (bounds.heightRatio < 0.3 || bounds.yRatio > 0.45 || bounds.yRatio + bounds.heightRatio < 0.55) {
+      if (bounds.heightRatio < 0.42 || bounds.yRatio > 0.38 || bounds.yRatio + bounds.heightRatio < 0.78) {
         return "Head-to-toe is not fully visible. Step back until the whole body is in frame.";
       }
       const [upper, middle, lower, feet] = getCenterBodyPresence(metrics);
-      if (upper < 0.025 || middle < 0.035 || lower < 0.025 || feet < 0.015) {
+      if (upper < 0.018 || middle < 0.025 || lower < 0.018 || feet < 0.012) {
         return "Head-to-toe is not fully visible. Stand centered and step back until feet are visible.";
       }
     }
@@ -6449,7 +6558,8 @@ const KycImageCapture = ({
       return;
     }
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+    const outputCanvas = getCaptureOutputCanvas(canvas);
+    const dataUrl = outputCanvas.toDataURL("image/jpeg", 0.9);
     setPreview(dataUrl);
     if (auto) {
       setIsAutoCapturing(true);
@@ -6472,19 +6582,32 @@ const KycImageCapture = ({
     let stableFrames = 0;
     let waitingFrames = 0;
     let clearFrames = 0;
-    const minimumAutoCaptureMs = captureType === "id" ? 4200 : 1800;
-    const requiredClearFrames = captureType === "id" ? 7 : captureType === "fullBody" ? 5 : 3;
-    const requiredStableFrames = captureType === "id" ? 5 : 3;
+    const minimumAutoCaptureMs = captureType === "id" ? 8000 : captureType === "fullBody" ? 6500 : 1800;
+    const requiredClearFrames = captureType === "id" ? 2 : captureType === "fullBody" ? 4 : 3;
+    const requiredStableFrames = captureType === "id" ? 3 : 2;
     autoCaptureTimerRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - autoCaptureStartedAtRef.current;
+      const waitedLongEnough = elapsed >= minimumAutoCaptureMs;
+      if (!waitedLongEnough) {
+        const secondsLeft = Math.max(1, Math.ceil((minimumAutoCaptureMs - elapsed) / 1000));
+        if (Date.now() - autoStatusRef.current > 900) {
+          setStatus(getCapturePrepMessage(secondsLeft));
+          autoStatusRef.current = Date.now();
+        }
+        return;
+      }
+
       const motionScore = getMotionScore();
       const video = videoRef.current;
       const canvas = canvasRef.current;
       let hasClearFrame = false;
+      let frameMessage = "";
       if (video && canvas && video.videoWidth) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
         const qualityMessage = checkImageQuality(canvas);
+        frameMessage = qualityMessage;
         hasClearFrame = !qualityMessage;
         if (qualityMessage && Date.now() - autoStatusRef.current > 1500) {
           setStatus(qualityMessage);
@@ -6502,12 +6625,15 @@ const KycImageCapture = ({
         stableFrames = 0;
         waitingFrames += 1;
         if (!hasClearFrame && waitingFrames % 4 === 0) {
-          setStatus("Auto-capture is waiting for the camera to be steady.");
+          setStatus(frameMessage || "Auto-capture is checking the frame.");
         }
       }
 
-      const waitedLongEnough = Date.now() - autoCaptureStartedAtRef.current >= minimumAutoCaptureMs;
-      if (waitedLongEnough && stableFrames >= requiredStableFrames && clearFrames >= Math.min(3, requiredClearFrames)) {
+      if (captureType === "id" && waitedLongEnough && clearFrames >= requiredClearFrames) {
+        captureFromVideo({ auto: true, ignoreMotion: true });
+        clearFrames = 0;
+        stableFrames = 0;
+      } else if (waitedLongEnough && stableFrames >= requiredStableFrames && clearFrames >= Math.min(3, requiredClearFrames)) {
         captureFromVideo({ auto: true });
         stableFrames = 0;
       } else if (waitedLongEnough && clearFrames >= requiredClearFrames) {
@@ -6515,7 +6641,7 @@ const KycImageCapture = ({
         clearFrames = 0;
         stableFrames = 0;
       }
-    }, 700);
+    }, 600);
 
     return () => {
       if (autoCaptureTimerRef.current) {
@@ -6580,10 +6706,14 @@ const KycImageCapture = ({
               <div
                 className={
                   captureType === "id"
-                    ? "h-[42%] w-[82%] rounded-2xl border-2 border-dashed border-white/70 shadow-[0_0_0_999px_rgba(2,6,23,0.28)] sm:w-[58%]"
-                    : "h-[76%] w-[44%] rounded-[999px] border-2 border-dashed border-white/70 shadow-[0_0_0_999px_rgba(2,6,23,0.24)] sm:w-[28%]"
+                    ? "flex h-[42%] w-[82%] items-end justify-center rounded-2xl border-2 border-dashed border-white/70 px-4 pb-4 text-center shadow-[0_0_0_999px_rgba(2,6,23,0.28)] sm:w-[58%]"
+                    : "flex h-[76%] w-[44%] items-end justify-center rounded-[999px] border-2 border-dashed border-white/70 px-4 pb-7 text-center shadow-[0_0_0_999px_rgba(2,6,23,0.24)] sm:w-[28%]"
                 }
-              />
+              >
+                <span className="rounded-full bg-black/55 px-3 py-2 text-[11px] font-black uppercase tracking-[0.14em] text-white sm:text-xs">
+                  {captureType === "id" ? "ID card only" : "Full body"}
+                </span>
+              </div>
             </div>
           )}
 
@@ -6595,14 +6725,23 @@ const KycImageCapture = ({
                   ? "Clear image captured. Moving to the next step..."
                   : status || "Hold steady inside the guide. Capture runs automatically."}
             </div>
-            {status.toLowerCase().includes("camera") && !preview && (
+            {!preview && (
               <div className="mt-3 flex justify-center gap-3">
+                {status.toLowerCase().includes("camera") && (
+                  <button
+                    type="button"
+                    className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-xs font-bold text-slate-100"
+                    onClick={startCamera}
+                  >
+                    Retry camera
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="rounded-xl border border-white/10 bg-white/10 px-4 py-2 text-xs font-bold text-slate-100"
-                  onClick={startCamera}
+                  className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg"
+                  onClick={() => captureFromVideo({ auto: false })}
                 >
-                  Retry camera
+                  {captureLabel}
                 </button>
                 <button
                   type="button"
@@ -7273,7 +7412,7 @@ const CarelyAIAssistant = () => {
       const video = userVideoRef.current;
       if (!video || !video.videoWidth) return;
       const motionScore = calculateVideoMotionScore(video);
-      if (motionScore > 1.2 && motionScore < 18) {
+      if (motionScore < 18) {
         stableFrames += 1;
       } else if (motionScore > 28) {
         stableFrames = 0;
@@ -13361,7 +13500,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                         </p>
                       </div>
                     )
-                  ) : false && !idCaptureComplete ? (
+                  ) : !idCaptureComplete ? (
                     <KycImageCapture
                       key="id-document-capture"
                       title="Upload ID card photo"
@@ -13376,7 +13515,7 @@ recentTranscriptFingerprintsRef.current.set(`answer:${normalize(cleanUserMessage
                       }}
                       onSkip={() => setIdCaptureComplete(true)}
                     />
-                  ) : false && !fullBodyCaptureComplete ? (
+                  ) : !fullBodyCaptureComplete ? (
                     <KycImageCapture
                       key="full-body-capture"
                       title="Upload head-to-toe photo"
